@@ -1,0 +1,6 @@
+@GithubBadges_HostAddress = http://localhost:5131
+
+GET {{GithubBadges_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
