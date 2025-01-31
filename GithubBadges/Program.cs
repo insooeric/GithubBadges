@@ -1,24 +1,31 @@
-var builder = WebApplication.CreateBuilder(args);
-{
-    builder.Services.AddCors(options =>
-    {
-        options.AddPolicy("AllowLocalhost",
-            builder =>
-            {
-                builder.WithOrigins("http://localhost:3000").AllowAnyHeader().AllowAnyMethod().AllowCredentials();
-            });
-    });
-}
-// Add services to the container.
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using DotNetEnv;
+Env.Load();
+// Environment.GetEnvironmentVariable("GOOGLE_PRIVATE_KEY")
 
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowLocalhost",
+        policy =>
+        {
+            policy
+                .WithOrigins("http://localhost:5173")
+                .AllowCredentials()
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        });
+});
+
+builder.Services.AddHttpClient();
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
