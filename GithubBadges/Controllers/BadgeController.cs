@@ -8,6 +8,15 @@ using Newtonsoft.Json.Linq;
 using DotNetEnv;
 using Google.Apis.Storage.v1.Data;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using System.Management;
 
 namespace GithubBadges.Controllers
 {
@@ -53,6 +62,7 @@ namespace GithubBadges.Controllers
         }
 
         [HttpPost("upload-badge")]
+        [Authorize]
         public async Task<IActionResult> UploadBadgeAsync([FromForm] BadgeUploadRequestModel request)
         {
             Env.Load();
@@ -73,6 +83,11 @@ namespace GithubBadges.Controllers
                     return BadRequest(new { Message = "User Id is required" });
                 }
 
+                if (request.UserId.Equals("-default"))
+                {
+                    return BadRequest(new { Message = "You are not allowed to change default badge" });
+                }
+
                 var validExtensions = new[] { ".png", ".jpg", ".jpeg" };
                 var fileExtension = Path.GetExtension(request.BadgeFile.FileName).ToLower();
                 if (!validExtensions.Contains(fileExtension))
@@ -82,7 +97,6 @@ namespace GithubBadges.Controllers
 
                 string userBucketName = $"{request.UserId}";
                 string fileName = $"{request.BadgeName}";
-                // fileExtension
 
                 var credential = GoogleCredential.FromJson(JsonGoogleCred);
                 StorageClient storageClient = await StorageClient.CreateAsync(credential);
@@ -93,7 +107,6 @@ namespace GithubBadges.Controllers
                 await foreach (var obj in objects)
                 {
                     string fileNameOnly = Path.GetFileNameWithoutExtension(obj.Name.Substring(prefix.Length));
-                    // Console.WriteLine($"File base name: {fileNameOnly}");
 
                     if (fileNameOnly.Equals(request.BadgeName))
                     {
@@ -102,10 +115,33 @@ namespace GithubBadges.Controllers
                 }
 
                 string fullPath = userBucketName + "/" + fileName + fileExtension;
+
+
                 using (var stream = request.BadgeFile.OpenReadStream())
                 {
-                    await storageClient.UploadObjectAsync(BucketName, fullPath, null, stream);
-                } // ok, this works
+                    using (var image = Image.Load(stream))
+                    {
+                        int newWidth = 100;
+                        int newHeight = (int)(image.Height * (100.0 / image.Width));
+
+                        image.Mutate(x => x.Resize(newWidth, newHeight));
+
+                        using (var ms = new MemoryStream())
+                        {
+                            if (fileExtension == ".png")
+                            {
+                                image.Save(ms, new PngEncoder());
+                            }
+                            else
+                            {
+                                image.Save(ms, new JpegEncoder());
+                            }
+                            ms.Position = 0; 
+
+                            await storageClient.UploadObjectAsync(BucketName, fullPath, null, ms);
+                        }
+                    }
+                }
 
 
                 string gcs_url = $"https://storage.cloud.google.com/{BucketName}/{fullPath}";
@@ -118,7 +154,190 @@ namespace GithubBadges.Controllers
             }
         }
 
+        [HttpGet("get-all-default-badge")]
+        public async Task<IActionResult> GetAllDefaultBadgeAsync()
+        {
+            try
+            {
+                string userBucketName = $"-default";
+
+                var credential = GoogleCredential.FromJson(JsonGoogleCred);
+                StorageClient storageClient = await StorageClient.CreateAsync(credential);
+                string prefix = $"{userBucketName}";
+                var allObjects = storageClient.ListObjectsAsync(BucketName, prefix);
+
+                var badgeList = new List<BadgeObject>();
+                await foreach (var storageObject in allObjects)
+                {
+                    var jsonString = JsonConvert.SerializeObject(storageObject, Formatting.Indented);
+                    string fileName = Path.GetFileNameWithoutExtension(storageObject.Name.Replace($"{userBucketName}/", ""));
+                    badgeList.Add(new BadgeObject
+                    {
+                        UserId = userBucketName,
+                        BadgeName = fileName,
+                        BadgeURL = $"https://localhost:32769/api/badge?badge={fileName}"
+                    });
+                }
+
+                if (badgeList.Count > 0)
+                {
+                    badgeList.RemoveAt(0);
+                }
+
+                return Ok(new
+                {
+                    Message = "Retrieved default badges successfully.",
+                    Badges = badgeList
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = $"Unexpected error: {ex.Message}" });
+            }
+        }
+
+        [HttpPost("get-all-badge")]
+        [Authorize]
+        public async Task<IActionResult> GetAllBadgeAsync([FromBody] BadgeGetRequest request)
+        {
+            try
+            {
+                if (request == null)
+                {
+                    return BadRequest(new { Message = "Request body is missing." });
+                }
+
+
+                if (string.IsNullOrEmpty(request.UserId))
+                {
+                    return BadRequest(new { Message = "User ID is required." });
+                }
+
+                if (string.IsNullOrEmpty(JsonGoogleCred))
+                {
+                    return BadRequest(new { Message = "Server configuration error: Missing credentials." });
+                }
+
+                string userBucketName = $"{request.UserId}";
+
+                var credential = GoogleCredential.FromJson(JsonGoogleCred);
+                StorageClient storageClient = await StorageClient.CreateAsync(credential);
+                string prefix = $"{userBucketName}";
+                var allObjects = storageClient.ListObjectsAsync(BucketName, prefix);
+
+                var badgeList = new List<BadgeObject>();
+                await foreach (var storageObject in allObjects)
+                {
+                    var jsonString = JsonConvert.SerializeObject(storageObject, Formatting.Indented);
+                    // Console.WriteLine(jsonString);
+                    string fileName = Path.GetFileNameWithoutExtension(storageObject.Name.Replace($"{userBucketName}/", ""));
+                    badgeList.Add(new BadgeObject
+                    {
+                        UserId = userBucketName,
+                        BadgeName = fileName,
+                        BadgeURL = $"https://localhost:32769/api/badge?user={userBucketName}&badge={fileName}"
+                    });
+                }
+
+
+
+                return Ok(new
+                {
+                    Message = "Retrieved badges successfully.",
+                    Badges = badgeList
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = $"Unexpected error: {ex.Message}" });
+            }
+        }
+
+        [HttpPost("update-badge")]
+        [Authorize]
+        public async Task<IActionResult> UpdateBadgeAsync([FromBody] BadgeUpdateRequest request)
+        {
+            try
+            {
+                if (request == null)
+                {
+                    return BadRequest(new { Message = "Request body is missing." });
+                }
+
+                if (string.IsNullOrEmpty(request.UserId))
+                {
+                    return BadRequest(new { Message = "User ID is required." });
+                }
+
+                if (string.IsNullOrEmpty(request.OldName))
+                {
+                    return BadRequest(new { Message = "OldName is required." });
+                }
+
+                if (string.IsNullOrEmpty(request.NewName))
+                {
+                    return BadRequest(new { Message = "NewName is required." });
+                }
+
+
+                if (request.UserId.Equals("-default"))
+                {
+                    return BadRequest(new { Message = "You are not allowed to update default badge" });
+                }
+
+                var credential = GoogleCredential.FromJson(JsonGoogleCred);
+                StorageClient storageClient = await StorageClient.CreateAsync(credential);
+
+                string userBucketName = request.UserId;
+                string oldObjectPrefix = $"{userBucketName}/{request.OldName}";
+                var matchingObjects = storageClient.ListObjectsAsync(BucketName, oldObjectPrefix);
+                Google.Apis.Storage.v1.Data.Object oldBadgeObject = null;
+
+                await foreach (var file in matchingObjects)
+                {
+                    string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file.Name);
+                    if (fileNameWithoutExtension.Equals(request.OldName))
+                    {
+                        oldBadgeObject = file;
+                        break;
+                    }
+                }
+
+                if (oldBadgeObject == null)
+                {
+                    return NotFound(new { Message = "Badge not found." });
+                }
+
+                string oldExtension = Path.GetExtension(oldBadgeObject.Name);
+                string newObjectName = $"{userBucketName}/{request.NewName}{oldExtension}";
+
+                try
+                {
+                    storageClient.CopyObject(
+                        sourceBucket: BucketName,
+                        sourceObjectName: oldBadgeObject.Name,
+                        destinationBucket: BucketName,
+                        destinationObjectName: newObjectName
+                    );
+
+                    await storageClient.DeleteObjectAsync(BucketName, oldBadgeObject.Name);
+                }
+                catch (Exception ex)
+                {
+                    return StatusCode(500, new { Message = $"Error while copying or deleting badge: {ex.Message}" });
+                }
+
+                return Ok(new { Message = "Badge has been updated successfully." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = $"Unexpected error: {ex.Message}" });
+            }
+        }
+
+
         [HttpDelete("delete-badge")]
+        [Authorize]
         public async Task<IActionResult> DeleteBadgeAsync([FromBody] BadgeDeleteRequest request)
         {
             Env.Load();
@@ -138,6 +357,11 @@ namespace GithubBadges.Controllers
                 if (string.IsNullOrEmpty(request.UserId))
                 {
                     return BadRequest(new { Message = "User ID is required." });
+                }
+
+                if (request.UserId.Equals("-default"))
+                {
+                    return BadRequest(new { Message = "You are not allowed to delete default badge" });
                 }
 
                 string userBucketName = $"{request.UserId}";
@@ -196,40 +420,19 @@ namespace GithubBadges.Controllers
 
 
         [HttpGet("")]
-        // test https://localhost:32769/api/badge?user=test1234&badge=cat
-        //public async Task<IActionResult> GetBadgeAsync([FromBody] BadgeGetRequest request)
-        public async Task<IActionResult> GetBadgeAsync([FromQuery] string user, [FromQuery] string badge)
+        // example: https://localhost:32769/api/badge?user=insooeric&badge=auth
+        public async Task<IActionResult> GetBadgeAsync([FromQuery] string? user, [FromQuery] string badge)
         {
             Env.Load();
             try
             {
-                if (string.IsNullOrEmpty(user))
-                    return BadRequest(new { Message = "User Id is required." });
+                string userFolderName = string.IsNullOrEmpty(user) ? "-default" : user;
 
                 if (string.IsNullOrEmpty(badge))
                     return BadRequest(new { Message = "Badge name is required." });
 
-                // string bucketName = "badge-bucket";
-                string userFolderName = user;
                 string fileName = badge;
 
-                string privateKey = Environment.GetEnvironmentVariable("GOOGLE_PRIVATE_KEY")?.Replace("\\n", "\n") ?? "";
-                var serviceAccountJson = new JObject
-                {
-                    { "type", Environment.GetEnvironmentVariable("GOOGLE_TYPE") ?? "" },
-                    { "project_id", Environment.GetEnvironmentVariable("GOOGLE_PROJECT_ID") ?? "" },
-                    { "private_key_id", Environment.GetEnvironmentVariable("GOOGLE_PRIVATE_KEY_ID") ?? "" },
-                    { "private_key", privateKey },
-                    { "client_email", Environment.GetEnvironmentVariable("GOOGLE_CLIENT_EMAIL") ?? "" },
-                    { "client_id", Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID") ?? "" },
-                    { "auth_uri", Environment.GetEnvironmentVariable("GOOGLE_AUTH_URI") ?? "" },
-                    { "token_uri", Environment.GetEnvironmentVariable("GOOGLE_TOKEN_URI") ?? "" },
-                    { "auth_provider_x509_cert_url", Environment.GetEnvironmentVariable("GOOGLE_AUTH_PROVIDER_X509_CERT_URL") ?? "" },
-                    { "client_x509_cert_url", Environment.GetEnvironmentVariable("GOOGLE_CLIENT_X509_CERT_URL") ?? "" },
-                    { "universe_domain", Environment.GetEnvironmentVariable("GOOGLE_UNIVERSE_DOMAIN") ?? "" }
-                };
-
-                var jsonCred = JsonConvert.SerializeObject(serviceAccountJson);
                 var credential = GoogleCredential.FromJson(JsonGoogleCred);
                 StorageClient storageClient = await StorageClient.CreateAsync(credential);
 
@@ -251,28 +454,58 @@ namespace GithubBadges.Controllers
                 {
                     return NotFound(new { Message = "Badge not found." });
                 }
-                
-                // ok we do have badge image in this point
-                // whateverimage => base64img => svg?
+
                 using var memoryStream = new MemoryStream();
                 await storageClient.DownloadObjectAsync(badgeObject, memoryStream);
                 var imageBytes = memoryStream.ToArray();
+                string mimeType;
 
                 string ext = Path.GetExtension(badgeObject.Name).ToLower();
-                string mimeType = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
+                if (ext == ".svg")
+                {
+                    mimeType = "image/svg+xml";
+                    string svgContent = Encoding.UTF8.GetString(imageBytes);
 
-                string base64Image = Convert.ToBase64String(imageBytes);
-                string svgContent = $@"
-                    <svg xmlns=""http://www.w3.org/2000/svg"" width=""200"" height=""200"">
-                      <image href=""data:{mimeType};base64,{base64Image}"" width=""200"" height=""200"" />
-                    </svg>";
+                    svgContent = System.Text.RegularExpressions.Regex.Replace(svgContent, @"<svg\s*(.*?)>", match =>
+                    {
+                        string tagContent = match.Groups[1].Value;
+                        if (tagContent.Contains("style="))
+                        {
+                            return System.Text.RegularExpressions.Regex.Replace(match.Value, @"style\s*=\s*""(.*?)""", m =>
+                            {
+                                string existingStyles = m.Groups[1].Value;
+                                return $"style=\"{existingStyles} width: auto; height: 30px;\"";
+                            });
+                        }
+                        else
+                        {
+                            return match.Value.Replace("<svg", "<svg style=\"width: auto; height: 30px;\"");
+                        }
+                    });
 
-                return File(Encoding.UTF8.GetBytes(svgContent), "image/svg+xml");
+                    return Content(svgContent, mimeType);
+                }
+
+                else
+                {
+                    mimeType = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
+
+                    string base64Image = Convert.ToBase64String(imageBytes);
+                    string svgContent = $@"
+<svg xmlns=""http://www.w3.org/2000/svg"" width=""30"" height=""30"" style=""border-radius: 0.5rem; overflow: hidden;"">
+  <image href=""data:{mimeType};base64,{base64Image}"" width=""30"" height=""30"" 
+         preserveAspectRatio=""xMidYMid meet"" />
+</svg>";
+
+                    return File(Encoding.UTF8.GetBytes(svgContent), "image/svg+xml");
+                }
             }
             catch (Exception ex)
             {
                 return BadRequest(new { Message = $"Error while grabbing badge {ex.Message}" });
             }
         }
+
+
     }
 }
