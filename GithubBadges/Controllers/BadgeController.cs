@@ -475,8 +475,9 @@ namespace GithubBadges.Controllers
                         tagContent = System.Text.RegularExpressions.Regex.Replace(tagContent, @"\s*width\s*=\s*""\d+[^""]*""", "");
                         tagContent = System.Text.RegularExpressions.Regex.Replace(tagContent, @"\s*height\s*=\s*""\d+[^""]*""", "");
 
-                        return $"<svg {tagContent} width=\"30\" height=\"30\">";
+                        return $"<svg {tagContent} width=\"30\" height=\"30\" style=\"width: 30px; height: 30px;\">";
                     });
+
 
                     return Content(svgContent, mimeType);
                 }
