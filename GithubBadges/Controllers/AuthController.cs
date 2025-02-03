@@ -45,7 +45,7 @@ namespace GithubBadges.Controllers
                 Expires = DateTime.UtcNow.AddHours(1)
             });
 
-            return Redirect("http://localhost:5173/");
+            return Redirect("https://badgehub.vercel.app/");
         }
 
         [HttpGet("user")]
