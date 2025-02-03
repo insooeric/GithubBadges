@@ -47,7 +47,7 @@ builder.Services.AddCors(options =>
         policy =>
         {
             policy
-                .WithOrigins("http://localhost:5173", "https://badgehub.vercel.app/")
+                .WithOrigins("http://localhost:5173", "https://badgehub.vercel.app/", "https://github-badge-frontend-insooerics-projects.vercel.app/")
                 .AllowCredentials()
                 .AllowAnyHeader()
                 .AllowAnyMethod();
