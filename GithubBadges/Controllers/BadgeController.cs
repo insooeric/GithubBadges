@@ -235,7 +235,7 @@ namespace GithubBadges.Controllers
                     {
                         UserId = userBucketName,
                         BadgeName = fileName,
-                        BadgeURL = $"https://localhost:32769/api/badge?user={userBucketName}&badge={fileName}"
+                        BadgeURL = $"https://githubbadges.onrender.com/api/badge?user={userBucketName}&badge={fileName}"
                     });
                 }
 
