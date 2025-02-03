@@ -464,19 +464,16 @@ namespace GithubBadges.Controllers
                 if (ext == ".svg")
                 {
                     mimeType = "image/svg+xml";
-                    string svgContent = Encoding.UTF8.GetString(imageBytes);
+                    string outerComponent =
+                        "<svg xmlns=\"http://www.w3.org/2000/svg\" " +
+                        "xmlns:xlink=\"http://www.w3.org/1999/xlink\" " +
+                        "width=\"48\" height=\"48\" viewBox=\"0 0 256 256\" " +
+                        "fill=\"none\" version=\"1.1\">\r\n" +
+                        "\r\n\t\t<g transform=\"translate(0, 0)\">";
+                    string closeOuterComponent = "</g>\r\n</svg>";
+                    string svgContent = outerComponent + Encoding.UTF8.GetString(imageBytes) + closeOuterComponent;
+                    Console.WriteLine(svgContent);
 
-                    svgContent = System.Text.RegularExpressions.Regex.Replace(svgContent, @"<style[\s\S]*?</style>", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
-                    svgContent = System.Text.RegularExpressions.Regex.Replace(svgContent, @"<svg\s*([^>]*)>", match =>
-                    {
-                        string tagContent = match.Groups[1].Value;
-
-                        tagContent = System.Text.RegularExpressions.Regex.Replace(tagContent, @"\s*width\s*=\s*""\d+[^""]*""", "");
-                        tagContent = System.Text.RegularExpressions.Regex.Replace(tagContent, @"\s*height\s*=\s*""\d+[^""]*""", "");
-
-                        return $"<svg {tagContent} width=\"30\" height=\"30\">";
-                    });
 
                     return Content(svgContent, mimeType);
                 }
