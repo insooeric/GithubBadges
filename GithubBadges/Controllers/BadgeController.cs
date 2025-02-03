@@ -467,7 +467,6 @@ namespace GithubBadges.Controllers
                     string svgContent = Encoding.UTF8.GetString(imageBytes);
 
                     svgContent = System.Text.RegularExpressions.Regex.Replace(svgContent, @"<style[\s\S]*?</style>", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                    svgContent = System.Text.RegularExpressions.Regex.Replace(svgContent, @"\s*id\s*=\s*""[^""]*""", "");
 
                     svgContent = System.Text.RegularExpressions.Regex.Replace(svgContent, @"<svg\s*([^>]*)>", match =>
                     {
@@ -476,9 +475,8 @@ namespace GithubBadges.Controllers
                         tagContent = System.Text.RegularExpressions.Regex.Replace(tagContent, @"\s*width\s*=\s*""\d+[^""]*""", "");
                         tagContent = System.Text.RegularExpressions.Regex.Replace(tagContent, @"\s*height\s*=\s*""\d+[^""]*""", "");
 
-                        return $"<svg {tagContent} width=\"30\" height=\"30\" style=\"width: 30px; height: 30px;\">";
+                        return $"<svg {tagContent} width=\"30\" height=\"30\">";
                     });
-
 
                     return Content(svgContent, mimeType);
                 }
