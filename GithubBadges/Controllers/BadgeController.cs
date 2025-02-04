@@ -6,17 +6,12 @@ using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using DotNetEnv;
-using Google.Apis.Storage.v1.Data;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Png;
-using System.Management;
 using System.Text.RegularExpressions;
 
 namespace GithubBadges.Controllers
@@ -119,21 +114,62 @@ namespace GithubBadges.Controllers
 
                 if (fileExtension == ".svg")
                 {
+                    string rawSVG;
                     using (var stream = request.BadgeFile.OpenReadStream())
                     {
-                        await storageClient.UploadObjectAsync(BucketName, fullPath, null, stream);
+                        using (var reader = new StreamReader(stream))
+                        {
+                            rawSVG = await reader.ReadToEndAsync();
+                        }
                     }
-                    string gcs_url_svg = $"https://storage.cloud.google.com/{BucketName}/{fullPath}";
 
+                    double newHeight = 100.0;
+                    double newWidth = newHeight;
+
+                    var viewBoxMatch = Regex.Match(rawSVG, @"viewBox\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
+                    if (viewBoxMatch.Success)
+                    {
+                        string viewBoxValue = viewBoxMatch.Groups[1].Value;
+                        string[] parts = viewBoxValue.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length == 4 &&
+                            double.TryParse(parts[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double vbWidth) &&
+                            double.TryParse(parts[3], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double vbHeight) &&
+                            vbHeight != 0)
+                        {
+                            newWidth = (vbWidth / vbHeight) * newHeight;
+                        }
+                    }
+                    else
+                    {
+                        var widthMatch = Regex.Match(rawSVG, @"\bwidth\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
+                        if (widthMatch.Success)
+                        {
+                            string originalWidthStr = widthMatch.Groups[1].Value.Replace("px", "");
+                            if (double.TryParse(originalWidthStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double origWidth))
+                            {
+                                newWidth = origWidth;
+                            }
+                        }
+                    }
+
+                    string updatedSVG = UpdateRootSvgAttributes(rawSVG, newWidth, newHeight);
+
+                    using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(updatedSVG)))
+                    {
+                        await storageClient.UploadObjectAsync(BucketName, fullPath, null, ms);
+                    }
+
+                    string gcs_url_svg = $"https://storage.cloud.google.com/{BucketName}/{fullPath}";
                     return Ok(new { Message = $"File has been uploaded successfully", PublicURL = gcs_url_svg });
                 }
+
 
                 using (var stream = request.BadgeFile.OpenReadStream())
                 {
                     using (var image = Image.Load(stream))
                     {
-                        int newWidth = 100;
-                        int newHeight = (int)(image.Height * (100.0 / image.Width));
+                        int newHeight = 100;
+                        int newWidth = (int)(image.Width * (100.0 / image.Height));
 
                         image.Mutate(x => x.Resize(newWidth, newHeight));
 
@@ -581,12 +617,31 @@ namespace GithubBadges.Controllers
             }
 
             string svgTag = svgTagMatch.Value;
+            string updatedSvgTag = svgTag;
 
-            string updatedSvgTag = Regex.Replace(svgTag, @"\bwidth\s*=\s*""[^""]*""",
-                $"width=\"{newWidth.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"", RegexOptions.IgnoreCase);
+            if (Regex.IsMatch(svgTag, @"\bwidth\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
+            {
+                updatedSvgTag = Regex.Replace(updatedSvgTag, @"\bwidth\s*=\s*""[^""]*""",
+                    $"width=\"{newWidth.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"",
+                    RegexOptions.IgnoreCase);
+            }
+            else
+            {
+                int insertIndex = updatedSvgTag.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) + 4;
+                updatedSvgTag = updatedSvgTag.Insert(insertIndex, $" width=\"{newWidth.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"");
+            }
 
-            updatedSvgTag = Regex.Replace(updatedSvgTag, @"\bheight\s*=\s*""[^""]*""",
-                $"height=\"{newHeight.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"", RegexOptions.IgnoreCase);
+            if (Regex.IsMatch(svgTag, @"\bheight\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
+            {
+                updatedSvgTag = Regex.Replace(updatedSvgTag, @"\bheight\s*=\s*""[^""]*""",
+                    $"height=\"{newHeight.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"",
+                    RegexOptions.IgnoreCase);
+            }
+            else
+            {
+                int insertIndex = updatedSvgTag.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) + 4;
+                updatedSvgTag = updatedSvgTag.Insert(insertIndex, $" height=\"{newHeight.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"");
+            }
 
             if (Regex.IsMatch(updatedSvgTag, @"\bstyle\s*=\s*""([^""]*)""", RegexOptions.IgnoreCase))
             {
@@ -614,6 +669,7 @@ namespace GithubBadges.Controllers
             svg = svg.Replace(svgTag, updatedSvgTag);
             return svg;
         }
+
 
 
     }
