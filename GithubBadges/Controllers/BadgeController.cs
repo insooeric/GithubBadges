@@ -17,6 +17,7 @@ using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
 using System.Management;
+using System.Text.RegularExpressions;
 
 namespace GithubBadges.Controllers
 {
@@ -116,6 +117,16 @@ namespace GithubBadges.Controllers
 
                 string fullPath = userBucketName + "/" + fileName + fileExtension;
 
+                if (fileExtension == ".svg")
+                {
+                    using (var stream = request.BadgeFile.OpenReadStream())
+                    {
+                        await storageClient.UploadObjectAsync(BucketName, fullPath, null, stream);
+                    }
+                    string gcs_url_svg = $"https://storage.cloud.google.com/{BucketName}/{fullPath}";
+
+                    return Ok(new { Message = $"File has been uploaded successfully", PublicURL = gcs_url_svg });
+                }
 
                 using (var stream = request.BadgeFile.OpenReadStream())
                 {
@@ -455,13 +466,7 @@ namespace GithubBadges.Controllers
                     return NotFound(new { Message = "Badge not found." });
                 }
 
-                string outerComponent =
-                    "<svg xmlns=\"http://www.w3.org/2000/svg\" " +
-                    "xmlns:xlink=\"http://www.w3.org/1999/xlink\" " +
-                    "width=\"40\" height=\"40\" viewBox=\"0 0 256 256\" " +
-                    "fill=\"none\" version=\"1.1\">\r\n" +
-                    "\r\n\t\t<g transform=\"translate(0, 0)\">";
-                string closeOuterComponent = "</g>\r\n</svg>";
+
 
                 using var memoryStream = new MemoryStream();
                 await storageClient.DownloadObjectAsync(badgeObject, memoryStream);
@@ -473,8 +478,71 @@ namespace GithubBadges.Controllers
                 {
                     mimeType = "image/svg+xml";
 
-                    string svgContent = outerComponent + Encoding.UTF8.GetString(imageBytes) + closeOuterComponent;
-                    Console.WriteLine(svgContent);
+                    string rawSVG = Encoding.UTF8.GetString(imageBytes);
+
+                    string svgContent;
+                    if (userFolderName.Equals("-default"))
+                    {
+                        string outerComponent =
+                            "<svg xmlns=\"http://www.w3.org/2000/svg\" " +
+                            "xmlns:xlink=\"http://www.w3.org/1999/xlink\" " +
+                            "width=\"40\" height=\"40\" viewBox=\"0 0 256 256\" " +
+                            "fill=\"none\" version=\"1.1\" style=\"border-radius: 0.5rem;\">" +
+                            "\r\n\t\t<g transform=\"translate(0, 0)\">";
+
+                        string closeOuterComponent = "</g>\r\n</svg>";
+                        svgContent = outerComponent + rawSVG + closeOuterComponent;
+                    }
+                    else
+                    {
+
+                        double newHeight = 40.0;
+                        double newWidth = newHeight;
+
+                        var viewBoxMatch = Regex.Match(rawSVG, @"viewBox\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
+                        if (viewBoxMatch.Success)
+                        {
+                            string viewBoxValue = viewBoxMatch.Groups[1].Value;
+                            string[] parts = viewBoxValue.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length == 4 &&
+                                double.TryParse(parts[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double vbWidth) &&
+                                double.TryParse(parts[3], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double vbHeight) &&
+                                vbHeight != 0)
+                            {
+                                newWidth = (vbWidth / vbHeight) * newHeight;
+                            }
+                            else
+                            {
+                                var widthMatch = Regex.Match(rawSVG, @"<svg\b[^>]*\bwidth\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
+                                if (widthMatch.Success)
+                                {
+                                    string originalWidthStr = widthMatch.Groups[1].Value;
+                                    originalWidthStr = originalWidthStr.Replace("px", "");
+                                    if (double.TryParse(originalWidthStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double origWidth))
+                                    {
+                                        newWidth = origWidth;
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            var widthMatch = Regex.Match(rawSVG, @"<svg\b[^>]*\bwidth\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
+                            if (widthMatch.Success)
+                            {
+                                string originalWidthStr = widthMatch.Groups[1].Value;
+                                originalWidthStr = originalWidthStr.Replace("px", "");
+                                if (double.TryParse(originalWidthStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double origWidth))
+                                {
+                                    newWidth = origWidth;
+                                }
+                            }
+                        }
+
+                        svgContent = UpdateRootSvgAttributes(rawSVG, newWidth, newHeight);
+
+                    }
+
 
 
                     return Content(svgContent, mimeType);
@@ -500,6 +568,49 @@ namespace GithubBadges.Controllers
             {
                 return BadRequest(new { Message = $"Error while grabbing badge {ex.Message}" });
             }
+        }
+
+        string UpdateRootSvgAttributes(string svg, double newWidth, double newHeight)
+        {
+            var svgTagMatch = Regex.Match(svg, @"<svg\b[^>]*>", RegexOptions.IgnoreCase);
+            if (!svgTagMatch.Success)
+            {
+                return svg;
+            }
+
+            string svgTag = svgTagMatch.Value;
+
+            string updatedSvgTag = Regex.Replace(svgTag, @"\bwidth\s*=\s*""[^""]*""",
+                $"width=\"{newWidth.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"", RegexOptions.IgnoreCase);
+
+            updatedSvgTag = Regex.Replace(updatedSvgTag, @"\bheight\s*=\s*""[^""]*""",
+                $"height=\"{newHeight.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"", RegexOptions.IgnoreCase);
+
+            if (Regex.IsMatch(updatedSvgTag, @"\bstyle\s*=\s*""([^""]*)""", RegexOptions.IgnoreCase))
+            {
+                updatedSvgTag = Regex.Replace(updatedSvgTag, @"\bstyle\s*=\s*""([^""]*)""", m =>
+                {
+                    string styleContent = m.Groups[1].Value;
+                    if (!Regex.IsMatch(styleContent, @"border-radius\s*:", RegexOptions.IgnoreCase))
+                    {
+                        styleContent = styleContent.Trim();
+                        if (!styleContent.EndsWith(";"))
+                        {
+                            styleContent += ";";
+                        }
+                        styleContent += " border-radius: 0.5rem;";
+                    }
+                    return $"style=\"{styleContent}\"";
+                }, RegexOptions.IgnoreCase);
+            }
+            else
+            {
+                updatedSvgTag = updatedSvgTag.TrimEnd('>');
+                updatedSvgTag += " style=\"border-radius: 0.5rem;\">";
+            }
+
+            svg = svg.Replace(svgTag, updatedSvgTag);
+            return svg;
         }
 
 
