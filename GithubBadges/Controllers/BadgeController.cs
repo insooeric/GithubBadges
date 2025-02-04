@@ -592,15 +592,27 @@ namespace GithubBadges.Controllers
                 {
                     mimeType = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
 
+                    int newHeight = 40;
+                    int newWidth;
+                    using (var msForDimensions = new MemoryStream(imageBytes))
+                    {
+                        using (var image = SixLabors.ImageSharp.Image.Load(msForDimensions))
+                        {
+                            newWidth = (int)(image.Width * (newHeight / (double)image.Height));
+                        }
+                    }
+
                     string base64Image = Convert.ToBase64String(imageBytes);
+
                     string svgContent = $@"
-<svg xmlns=""http://www.w3.org/2000/svg"" width=""40"" height=""40"" style=""border-radius: 0.5rem; overflow: hidden;"">
-  <image href=""data:{mimeType};base64,{base64Image}"" width=""40"" height=""40"" 
+<svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" style=""border-radius: 0.5rem; overflow: hidden;"">
+  <image href=""data:{mimeType};base64,{base64Image}"" width=""{newWidth}px"" height=""{newHeight}px"" 
          preserveAspectRatio=""xMidYMid meet"" />
 </svg>";
 
                     return File(Encoding.UTF8.GetBytes(svgContent), "image/svg+xml");
                 }
+
             }
             catch (Exception ex)
             {
