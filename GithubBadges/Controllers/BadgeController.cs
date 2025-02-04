@@ -242,11 +242,13 @@ namespace GithubBadges.Controllers
                     var jsonString = JsonConvert.SerializeObject(storageObject, Formatting.Indented);
                     // Console.WriteLine(jsonString);
                     string fileName = Path.GetFileNameWithoutExtension(storageObject.Name.Replace($"{userBucketName}/", ""));
+                    string fileExtension = Path.GetExtension(storageObject.Name);
                     badgeList.Add(new BadgeObject
                     {
                         UserId = userBucketName,
                         BadgeName = fileName,
-                        BadgeURL = $"https://githubbadges.onrender.com/api/badge?user={userBucketName}&badge={fileName}"
+                        BadgeURL = $"https://githubbadges.onrender.com/api/badge?user={userBucketName}&badge={fileName}",
+                        ImageType = fileExtension
                     });
                 }
 
