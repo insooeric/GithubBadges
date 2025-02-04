@@ -593,7 +593,7 @@ namespace GithubBadges.Controllers
                     mimeType = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
 
                     int newHeight = 40;
-                    int newWidth;
+                    int newWidth = newHeight;
                     using (var msForDimensions = new MemoryStream(imageBytes))
                     {
                         using (var image = SixLabors.ImageSharp.Image.Load(msForDimensions))
