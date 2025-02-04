@@ -455,6 +455,14 @@ namespace GithubBadges.Controllers
                     return NotFound(new { Message = "Badge not found." });
                 }
 
+                string outerComponent =
+                    "<svg xmlns=\"http://www.w3.org/2000/svg\" " +
+                    "xmlns:xlink=\"http://www.w3.org/1999/xlink\" " +
+                    "width=\"40\" height=\"40\" viewBox=\"0 0 256 256\" " +
+                    "fill=\"none\" version=\"1.1\">\r\n" +
+                    "\r\n\t\t<g transform=\"translate(0, 0)\">";
+                string closeOuterComponent = "</g>\r\n</svg>";
+
                 using var memoryStream = new MemoryStream();
                 await storageClient.DownloadObjectAsync(badgeObject, memoryStream);
                 var imageBytes = memoryStream.ToArray();
@@ -464,13 +472,7 @@ namespace GithubBadges.Controllers
                 if (ext == ".svg")
                 {
                     mimeType = "image/svg+xml";
-                    string outerComponent =
-                        "<svg xmlns=\"http://www.w3.org/2000/svg\" " +
-                        "xmlns:xlink=\"http://www.w3.org/1999/xlink\" " +
-                        "width=\"48\" height=\"48\" viewBox=\"0 0 256 256\" " +
-                        "fill=\"none\" version=\"1.1\">\r\n" +
-                        "\r\n\t\t<g transform=\"translate(0, 0)\">";
-                    string closeOuterComponent = "</g>\r\n</svg>";
+
                     string svgContent = outerComponent + Encoding.UTF8.GetString(imageBytes) + closeOuterComponent;
                     Console.WriteLine(svgContent);
 
@@ -486,8 +488,8 @@ namespace GithubBadges.Controllers
 
                     string base64Image = Convert.ToBase64String(imageBytes);
                     string svgContent = $@"
-<svg xmlns=""http://www.w3.org/2000/svg"" width=""30"" height=""30"" style=""border-radius: 0.5rem; overflow: hidden;"">
-  <image href=""data:{mimeType};base64,{base64Image}"" width=""30"" height=""30"" 
+<svg xmlns=""http://www.w3.org/2000/svg"" width=""40"" height=""40"" style=""border-radius: 0.5rem; overflow: hidden;"">
+  <image href=""data:{mimeType};base64,{base64Image}"" width=""40"" height=""40"" 
          preserveAspectRatio=""xMidYMid meet"" />
 </svg>";
 
