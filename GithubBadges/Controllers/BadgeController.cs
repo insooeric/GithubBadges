@@ -88,11 +88,11 @@ namespace GithubBadges.Controllers
                     return BadRequest(new { Message = "You are not allowed to change default badge" });
                 }
 
-                var validExtensions = new[] { ".png", ".jpg", ".jpeg" };
+                var validExtensions = new[] { ".png", ".jpg", ".jpeg", ".svg" };
                 var fileExtension = Path.GetExtension(request.BadgeFile.FileName).ToLower();
                 if (!validExtensions.Contains(fileExtension))
                 {
-                    return BadRequest(new { Message = "Only .png, .jpg, and .jpeg files are allowed." });
+                    return BadRequest(new { Message = "Only .png, .jpg, .jpeg, and .svg files are allowed." });
                 }
 
                 string userBucketName = $"{request.UserId}";
