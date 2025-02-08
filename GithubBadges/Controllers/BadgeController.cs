@@ -1,4 +1,5 @@
 ﻿using GithubBadges.Models;
+using GithubBadges.Middlewares;
 using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Storage.V1;
 using Microsoft.AspNetCore.Http;
@@ -13,6 +14,7 @@ using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace GithubBadges.Controllers
 {
@@ -59,7 +61,7 @@ namespace GithubBadges.Controllers
 
         [HttpPost("upload-badge")]
         [Authorize]
-        public async Task<IActionResult> UploadBadgeAsync([FromForm] BadgeUploadRequestModel request)
+        public async Task<IActionResult> TestUploadBadgeAsync([FromForm] BadgeUploadRequestModel request)
         {
             Env.Load();
             try
@@ -91,8 +93,8 @@ namespace GithubBadges.Controllers
                     return BadRequest(new { Message = "Only .png, .jpg, .jpeg, and .svg files are allowed." });
                 }
 
-                string userBucketName = $"{request.UserId}";
-                string fileName = $"{request.BadgeName}";
+                string userBucketName = request.UserId;
+                string fileName = request.BadgeName;
 
                 var credential = GoogleCredential.FromJson(JsonGoogleCred);
                 StorageClient storageClient = await StorageClient.CreateAsync(credential);
@@ -100,100 +102,35 @@ namespace GithubBadges.Controllers
                 string prefix = $"{request.UserId}/";
                 var objects = storageClient.ListObjectsAsync(BucketName, prefix);
 
+                if (!await Validator.CheckValidName(Path.GetFileNameWithoutExtension(fileName), JsonGoogleCred))
+                {
+                    return BadRequest(new { Message = "One of the default badges has the following name. Please choose another name." });
+                }
+
                 await foreach (var obj in objects)
                 {
                     string fileNameOnly = Path.GetFileNameWithoutExtension(obj.Name.Substring(prefix.Length));
-
-                    if (fileNameOnly.Equals(request.BadgeName))
+                    if (fileNameOnly.Equals(request.BadgeName, StringComparison.OrdinalIgnoreCase))
                     {
-                        return BadRequest(new { Message = $"File name already exists." });
+                        return BadRequest(new { Message = "File name already exists." });
                     }
                 }
 
-                string fullPath = userBucketName + "/" + fileName + fileExtension;
+                string finalSVG = ImageHelper.ConvertToSVG(request.BadgeFile);
 
-                if (fileExtension == ".svg")
+                string fullPath = $"{userBucketName}/{fileName}.svg";
+
+                string contentType = "image/svg+xml";
+
+                byte[] finalSVGBytes = System.Text.Encoding.UTF8.GetBytes(finalSVG);
+                using (var uploadStream = new MemoryStream(finalSVGBytes))
                 {
-                    string rawSVG;
-                    using (var stream = request.BadgeFile.OpenReadStream())
-                    {
-                        using (var reader = new StreamReader(stream))
-                        {
-                            rawSVG = await reader.ReadToEndAsync();
-                        }
-                    }
-
-                    double newHeight = 100.0;
-                    double newWidth = newHeight;
-
-                    var viewBoxMatch = Regex.Match(rawSVG, @"viewBox\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
-                    if (viewBoxMatch.Success)
-                    {
-                        string viewBoxValue = viewBoxMatch.Groups[1].Value;
-                        string[] parts = viewBoxValue.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
-                        if (parts.Length == 4 &&
-                            double.TryParse(parts[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double vbWidth) &&
-                            double.TryParse(parts[3], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double vbHeight) &&
-                            vbHeight != 0)
-                        {
-                            newWidth = (vbWidth / vbHeight) * newHeight;
-                        }
-                    }
-                    else
-                    {
-                        var widthMatch = Regex.Match(rawSVG, @"\bwidth\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
-                        if (widthMatch.Success)
-                        {
-                            string originalWidthStr = widthMatch.Groups[1].Value.Replace("px", "");
-                            if (double.TryParse(originalWidthStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double origWidth))
-                            {
-                                newWidth = origWidth;
-                            }
-                        }
-                    }
-
-                    string updatedSVG = UpdateRootSvgAttributes(rawSVG, newWidth, newHeight);
-
-                    using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(updatedSVG)))
-                    {
-                        await storageClient.UploadObjectAsync(BucketName, fullPath, null, ms);
-                    }
-
-                    string gcs_url_svg = $"https://storage.cloud.google.com/{BucketName}/{fullPath}";
-                    return Ok(new { Message = $"File has been uploaded successfully", PublicURL = gcs_url_svg });
+                    await storageClient.UploadObjectAsync(BucketName, fullPath, contentType, uploadStream);
                 }
-
-
-                using (var stream = request.BadgeFile.OpenReadStream())
-                {
-                    using (var image = Image.Load(stream))
-                    {
-                        int newHeight = 100;
-                        int newWidth = (int)(image.Width * (100.0 / image.Height));
-
-                        image.Mutate(x => x.Resize(newWidth, newHeight));
-
-                        using (var ms = new MemoryStream())
-                        {
-                            if (fileExtension == ".png")
-                            {
-                                image.Save(ms, new PngEncoder());
-                            }
-                            else
-                            {
-                                image.Save(ms, new JpegEncoder());
-                            }
-                            ms.Position = 0; 
-
-                            await storageClient.UploadObjectAsync(BucketName, fullPath, null, ms);
-                        }
-                    }
-                }
-
 
                 string gcs_url = $"https://storage.cloud.google.com/{BucketName}/{fullPath}";
 
-                return Ok(new { Message = $"File has been uploaded successfully", PublicURL = gcs_url });
+                return Ok(new { Message = "File has been uploaded successfully", PublicURL = gcs_url });
             }
             catch (Exception ex)
             {
@@ -337,6 +274,24 @@ namespace GithubBadges.Controllers
                 var credential = GoogleCredential.FromJson(JsonGoogleCred);
                 StorageClient storageClient = await StorageClient.CreateAsync(credential);
 
+                string prefix = $"{request.UserId}/";
+                var objects = storageClient.ListObjectsAsync(BucketName, prefix);
+
+                if (!await Validator.CheckValidName(Path.GetFileNameWithoutExtension(request.NewName), JsonGoogleCred))
+                {
+                    return BadRequest(new { Message = $"One of the default badge has the following name. Please choose another name." });
+                }
+
+                await foreach (var obj in objects)
+                {
+                    string fileNameOnly = Path.GetFileNameWithoutExtension(obj.Name.Substring(prefix.Length));
+
+                    if (fileNameOnly.Equals(request.NewName))
+                    {
+                        return BadRequest(new { Message = $"File name already exists." });
+                    }
+                }
+
                 string userBucketName = request.UserId;
                 string oldObjectPrefix = $"{userBucketName}/{request.OldName}";
                 var matchingObjects = storageClient.ListObjectsAsync(BucketName, oldObjectPrefix);
@@ -467,222 +422,129 @@ namespace GithubBadges.Controllers
             }
         }
 
-
         [HttpGet("")]
         // example: https://localhost:32769/api/badge?user=insooeric&badge=auth
-        public async Task<IActionResult> GetBadgeAsync([FromQuery] string? user, [FromQuery] string badge)
+        public async Task<IActionResult> GetBadgeAsync([FromQuery] string? user, [FromQuery] string badge, [FromQuery] int? row, [FromQuery] int? col, [FromQuery] bool? fitContent)
         {
-            Env.Load();
             try
             {
                 string userFolderName = string.IsNullOrEmpty(user) ? "-default" : user;
+                int definedRow = row ?? 1;
+                int definedCol = col ?? 1;
+                bool defineFitContent = fitContent ?? false;
+
 
                 if (string.IsNullOrEmpty(badge))
                     return BadRequest(new { Message = "Badge name is required." });
 
-                string fileName = badge;
+                List<ImageObject>? imageList = new List<ImageObject>();
+
+                string[] imageNameArr = badge.Split(",");
+                foreach (string imageName in imageNameArr)
+                {
+                    string newImageName = imageName.Replace(" ", "");
+                    if (string.IsNullOrWhiteSpace(imageName))
+                    {
+                        return BadRequest(new { Message = "Badge name is required." });
+                    }
+
+                    imageList.Add(
+                        new ImageObject
+                        {
+                            imageName = newImageName
+                        }
+                    );
+                }
 
                 var credential = GoogleCredential.FromJson(JsonGoogleCred);
                 StorageClient storageClient = await StorageClient.CreateAsync(credential);
 
-                string prefix = $"{userFolderName}/{fileName}";
-                var matchingObjects = storageClient.ListObjectsAsync(BucketName, prefix);
-                Google.Apis.Storage.v1.Data.Object badgeObject = null;
-
-                await foreach (var file in matchingObjects)
+                foreach (var item in imageList)
                 {
-                    string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file.Name);
-                    if (fileNameWithoutExtension.Equals(fileName))
+
+                    // if folder name isn't default, find in that folder first
+                    if (!userFolderName.Equals("-default"))
                     {
-                        badgeObject = file;
-                        break;
-                    }
-                }
-
-                if (badgeObject == null)
-                {
-                    return NotFound(new { Message = "Badge not found." });
-                }
-
-
-
-                using var memoryStream = new MemoryStream();
-                await storageClient.DownloadObjectAsync(badgeObject, memoryStream);
-                var imageBytes = memoryStream.ToArray();
-                string mimeType;
-
-                string ext = Path.GetExtension(badgeObject.Name).ToLower();
-                if (ext == ".svg")
-                {
-                    mimeType = "image/svg+xml";
-
-                    string rawSVG = Encoding.UTF8.GetString(imageBytes);
-
-                    string svgContent;
-                    if (userFolderName.Equals("-default"))
-                    {
-                        string outerComponent =
-                            "<svg xmlns=\"http://www.w3.org/2000/svg\" " +
-                            "xmlns:xlink=\"http://www.w3.org/1999/xlink\" " +
-                            "width=\"40\" height=\"40\" viewBox=\"0 0 256 256\" " +
-                            "fill=\"none\" version=\"1.1\" style=\"border-radius: 0.5rem;\">" +
-                            "\r\n\t\t<g transform=\"translate(0, 0)\">";
-
-                        string closeOuterComponent = "</g>\r\n</svg>";
-                        svgContent = outerComponent + rawSVG + closeOuterComponent;
-                    }
-                    else
-                    {
-
-                        double newHeight = 40.0;
-                        double newWidth = newHeight;
-
-                        var viewBoxMatch = Regex.Match(rawSVG, @"viewBox\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
-                        if (viewBoxMatch.Success)
+                        string prefix = $"{userFolderName}/{item.imageName}";
+                        var matchingObjects = storageClient.ListObjectsAsync(BucketName, prefix);
+                        await foreach (var file in matchingObjects)
                         {
-                            string viewBoxValue = viewBoxMatch.Groups[1].Value;
-                            string[] parts = viewBoxValue.Split(new char[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
-                            if (parts.Length == 4 &&
-                                double.TryParse(parts[2], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double vbWidth) &&
-                                double.TryParse(parts[3], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double vbHeight) &&
-                                vbHeight != 0)
+                            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file.Name);
+                            if (fileNameWithoutExtension.Equals(item.imageName))
                             {
-                                newWidth = (vbWidth / vbHeight) * newHeight;
-                            }
-                            else
-                            {
-                                var widthMatch = Regex.Match(rawSVG, @"<svg\b[^>]*\bwidth\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
-                                if (widthMatch.Success)
-                                {
-                                    string originalWidthStr = widthMatch.Groups[1].Value;
-                                    originalWidthStr = originalWidthStr.Replace("px", "");
-                                    if (double.TryParse(originalWidthStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double origWidth))
-                                    {
-                                        newWidth = origWidth;
-                                    }
-                                }
+                                item.imageObject = file;
+                                item.folderName = userFolderName;
+                                break;
                             }
                         }
-                        else
+                    }
+
+                    // if image object is still null, find in default
+                    if (item.imageObject == null)
+                    {
+                        string prefix = $"-default/{item.imageName}";
+                        var matchingObjects = storageClient.ListObjectsAsync(BucketName, prefix);
+                        await foreach (var file in matchingObjects)
                         {
-                            var widthMatch = Regex.Match(rawSVG, @"<svg\b[^>]*\bwidth\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase);
-                            if (widthMatch.Success)
+                            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file.Name);
+                            if (fileNameWithoutExtension.Equals(item.imageName))
                             {
-                                string originalWidthStr = widthMatch.Groups[1].Value;
-                                originalWidthStr = originalWidthStr.Replace("px", "");
-                                if (double.TryParse(originalWidthStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double origWidth))
-                                {
-                                    newWidth = origWidth;
-                                }
+                                item.imageObject = file;
+                                item.folderName = "-default";
+                                break;
                             }
                         }
-
-                        svgContent = UpdateRootSvgAttributes(rawSVG, newWidth, newHeight);
-
                     }
 
-
-
-                    return Content(svgContent, mimeType);
-                }
-
-
-
-                else
-                {
-                    mimeType = (ext == ".jpg" || ext == ".jpeg") ? "image/jpeg" : "image/png";
-
-                    int newHeight = 40;
-                    int newWidth = newHeight;
-                    using (var msForDimensions = new MemoryStream(imageBytes))
+                    if (item.imageObject == null)
                     {
-                        using (var image = SixLabors.ImageSharp.Image.Load(msForDimensions))
-                        {
-                            newWidth = (int)(image.Width * (newHeight / (double)image.Height));
-                        }
+                        return BadRequest(new { Message = $"Could not find the badge named \"{item.imageName}\"" });
                     }
 
-                    string base64Image = Convert.ToBase64String(imageBytes);
+                    // in this point, it's guarenteed that image object exists
+                    // we're gonna grab image as byte[] as well as extension
+                    using var memoryStream = new MemoryStream();
+                    await storageClient.DownloadObjectAsync(item.imageObject, memoryStream);
 
-                    string svgContent = $@"
-<svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" style=""border-radius: 0.5rem; overflow: hidden;"">
-  <image href=""data:{mimeType};base64,{base64Image}"" width=""{newWidth}px"" height=""{newHeight}px"" 
-         preserveAspectRatio=""xMidYMid meet"" />
-</svg>";
+                    item.imageInByte = memoryStream.ToArray();
 
-                    return File(Encoding.UTF8.GetBytes(svgContent), "image/svg+xml");
+                    string ext = Path.GetExtension(item.imageObject.Name).ToLower(); // this should be always svg
+                    item.imageExtension = ext;
                 }
 
+/*                foreach (var item in imageList)
+                {
+                    Console.WriteLine($"----------------------");
+                    Console.WriteLine($"Object exists? {(item.imageObject != null ? "Yes" : "No")}");
+                    Console.WriteLine($"Image byte exists?: {(item.imageInByte != null ? "Yes" : "No")}");
+                    Console.WriteLine($"Image folder: {item.folderName}");
+                    Console.WriteLine($"Image name: {item.imageName}");
+                    Console.WriteLine($"Image type: {item.imageExtension}\n");
+                }*/
+
+                string svgContent = "";
+
+                if (imageList.Count == 1)
+                {
+                    svgContent = Encoding.UTF8.GetString(imageList[0].imageInByte);
+                    svgContent = ImageHelper.Resize(svgContent, ImageHelper.GetWidthByHeight(40, svgContent), 40);
+                }
+                else if (imageList.Count > 1) // in case multiple images
+                {
+                    if (definedRow > imageList.Count || definedCol > imageList.Count)
+                    {
+                        return BadRequest(new { Message = $"Error: both Row and Column cannot exceed number of badges" });
+                    }
+
+                    svgContent = MultipleSVGCreator.Create(imageList, definedRow, definedCol, defineFitContent);
+                }
+
+                return Content(svgContent, "image/svg+xml");
             }
             catch (Exception ex)
             {
                 return BadRequest(new { Message = $"Error while grabbing badge {ex.Message}" });
             }
         }
-
-        string UpdateRootSvgAttributes(string svg, double newWidth, double newHeight)
-        {
-            var svgTagMatch = Regex.Match(svg, @"<svg\b[^>]*>", RegexOptions.IgnoreCase);
-            if (!svgTagMatch.Success)
-            {
-                return svg;
-            }
-
-            string svgTag = svgTagMatch.Value;
-            string updatedSvgTag = svgTag;
-
-            if (Regex.IsMatch(svgTag, @"\bwidth\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
-            {
-                updatedSvgTag = Regex.Replace(updatedSvgTag, @"\bwidth\s*=\s*""[^""]*""",
-                    $"width=\"{newWidth.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"",
-                    RegexOptions.IgnoreCase);
-            }
-            else
-            {
-                int insertIndex = updatedSvgTag.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) + 4;
-                updatedSvgTag = updatedSvgTag.Insert(insertIndex, $" width=\"{newWidth.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"");
-            }
-
-            if (Regex.IsMatch(svgTag, @"\bheight\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
-            {
-                updatedSvgTag = Regex.Replace(updatedSvgTag, @"\bheight\s*=\s*""[^""]*""",
-                    $"height=\"{newHeight.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"",
-                    RegexOptions.IgnoreCase);
-            }
-            else
-            {
-                int insertIndex = updatedSvgTag.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) + 4;
-                updatedSvgTag = updatedSvgTag.Insert(insertIndex, $" height=\"{newHeight.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px\"");
-            }
-
-            if (Regex.IsMatch(updatedSvgTag, @"\bstyle\s*=\s*""([^""]*)""", RegexOptions.IgnoreCase))
-            {
-                updatedSvgTag = Regex.Replace(updatedSvgTag, @"\bstyle\s*=\s*""([^""]*)""", m =>
-                {
-                    string styleContent = m.Groups[1].Value;
-                    if (!Regex.IsMatch(styleContent, @"border-radius\s*:", RegexOptions.IgnoreCase))
-                    {
-                        styleContent = styleContent.Trim();
-                        if (!styleContent.EndsWith(";"))
-                        {
-                            styleContent += ";";
-                        }
-                        styleContent += " border-radius: 0.5rem;";
-                    }
-                    return $"style=\"{styleContent}\"";
-                }, RegexOptions.IgnoreCase);
-            }
-            else
-            {
-                updatedSvgTag = updatedSvgTag.TrimEnd('>');
-                updatedSvgTag += " style=\"border-radius: 0.5rem;\">";
-            }
-
-            svg = svg.Replace(svgTag, updatedSvgTag);
-            return svg;
-        }
-
-
-
     }
 }
