@@ -10,7 +10,7 @@ namespace GithubBadges.Middlewares
 
         public static async Task<bool> CheckValidName(string name, string JsonGoogleCred)
         {
-            Console.WriteLine($"Checking name \"{name}\"");
+            // Console.WriteLine($"Checking name \"{name}\"");
             var credential = GoogleCredential.FromJson(JsonGoogleCred);
             StorageClient storageClient = await StorageClient.CreateAsync(credential);
 

@@ -17,7 +17,7 @@ namespace GithubBadges.Middlewares
 {
     public static class ImageHelper
     {
-        public static string ConvertToSVG(IFormFile file)
+        public static string ConvertToSVG(IFormFile file, string fileName) // fileName is unique
         {
             if (file == null)
                 throw new ArgumentNullException(nameof(file));
@@ -44,12 +44,12 @@ namespace GithubBadges.Middlewares
                 svgContent = $@"
 <svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" x=""0"" y=""0"">
   <defs>
-    <clipPath id=""clip"">
+    <clipPath id=""clip-{fileName}"">
       <rect width=""{newWidth}"" height=""{newHeight}"" rx=""8"" />
     </clipPath>
   </defs>
   <image href=""data:{mimeType};base64,{base64Image}"" width=""{newWidth}px"" height=""{newHeight}px"" 
-         clip-path=""url(#clip)"" preserveAspectRatio=""xMidYMid meet"" />
+         clip-path=""url(#clip-{fileName})"" preserveAspectRatio=""xMidYMid meet"" />
 </svg>";
             }
             else if (extension.Equals(".svg"))
@@ -63,7 +63,7 @@ namespace GithubBadges.Middlewares
 
                 string subSvgContent = Encoding.UTF8.GetString(fileBytes);
                 subSvgContent = RemoveComments(subSvgContent);
-                subSvgContent = AddClipPathAttribute(subSvgContent);
+                // subSvgContent = AddClipPathAttribute(subSvgContent);
                 subSvgContent = Regex.Replace(subSvgContent, @"<\?xml[^>]+\?>", string.Empty, RegexOptions.IgnoreCase);
 
                 byte[] svgInImageBytes = ConvertSvgToPng(subSvgContent);
@@ -76,12 +76,12 @@ namespace GithubBadges.Middlewares
                 svgContent = $@"
 <svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" x=""0"" y=""0"">
   <defs>
-    <clipPath id=""clip"">
+    <clipPath id=""clip-{fileName}"">
       <rect width=""{newWidth}"" height=""{newHeight}"" rx=""8"" />
     </clipPath>
   </defs>
   <image href=""data:image/png;base64,{base64Image}"" width=""{newWidth}px"" height=""{newHeight}px"" 
-         clip-path=""url(#clip)"" preserveAspectRatio=""xMidYMid meet"" />
+         clip-path=""url(#clip-{fileName})"" preserveAspectRatio=""xMidYMid meet"" />
 </svg>";
 
                 /*                Console.WriteLine("");
@@ -97,7 +97,7 @@ namespace GithubBadges.Middlewares
                 throw new NotSupportedException("Unsupported file type for conversion to SVG.");
             }
 
-            Console.WriteLine(svgContent);
+            // Console.WriteLine(svgContent);
             return svgContent;
         }
 
@@ -119,7 +119,7 @@ namespace GithubBadges.Middlewares
             }
         }
 
-        public static string AddClipPathAttribute(string svgContent)
+/*        public static string AddClipPathAttribute(string svgContent)
         {
             if (string.IsNullOrWhiteSpace(svgContent))
                 return svgContent;
@@ -141,7 +141,7 @@ namespace GithubBadges.Middlewares
             }
 
             return svgContent;
-        }
+        }*/
 
         public static string RemoveComments(string svgContent)
         {
@@ -251,46 +251,142 @@ namespace GithubBadges.Middlewares
             throw new FormatException($"Unable to parse dimension: {dimension}");
         }
 
+        // ISSUE WITH RESIZE
+
         public static string Resize(string svg, double newWidth, double newHeight)
         {
+            // Console.WriteLine(svg);
+            // ok, so we need to grab three things: outer <svg> tag, rect tag in <defs>, <image> tag
+            // this point, every tag are guarenteed to have "width" and "height" attribute
+            // both tag will be adjusted to newWidth and newHeight
             var svgTagMatch = Regex.Match(svg, @"<svg\b[^>]*>", RegexOptions.IgnoreCase);
-            if (!svgTagMatch.Success)
+            var rectTagMatch = Regex.Match(svg, @"<rect\b[^>]*>", RegexOptions.IgnoreCase);
+            var imageTagMatch = Regex.Match(svg, @"<image\b[^>]*>", RegexOptions.IgnoreCase);
+            if (!svgTagMatch.Success && !rectTagMatch.Success && !imageTagMatch.Success)
             {
                 return svg;
             }
 
-            string svgTag = svgTagMatch.Value;
-            string updatedSvgTag = svgTag;
+            /**********************************
+             *            SVG TAG             * 
+             **********************************/
+            {
+                string svgTag = svgTagMatch.Value;
+                string updatedSvgTag = svgTag;
+                //Console.WriteLine(updatedSvgTag);
 
-            if (Regex.IsMatch(svgTag, @"\bwidth\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
-            {
-                updatedSvgTag = Regex.Replace(
-                    updatedSvgTag,
-                    @"\bwidth\s*=\s*""[^""]*""",
-                    $"width=\"{newWidth.ToString("0.##", CultureInfo.InvariantCulture)}px\"",
-                    RegexOptions.IgnoreCase);
-            }
-            else
-            {
-                int insertIndex = updatedSvgTag.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) + 4;
-                updatedSvgTag = updatedSvgTag.Insert(insertIndex, $" width=\"{newWidth.ToString("0.##", CultureInfo.InvariantCulture)}px\"");
+                if (Regex.IsMatch(svgTag, @"\bwidth\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
+                {
+                    updatedSvgTag = Regex.Replace(
+                        updatedSvgTag,
+                        @"\bwidth\s*=\s*""[^""]*""",
+                        $"width=\"{newWidth.ToString("0.##", CultureInfo.InvariantCulture)}px\"",
+                        RegexOptions.IgnoreCase);
+                }
+                else
+                {
+                    int insertIndex = updatedSvgTag.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) + 4;
+                    updatedSvgTag = updatedSvgTag.Insert(insertIndex, $" width=\"{newWidth.ToString("0.##", CultureInfo.InvariantCulture)}px\"");
+                }
+
+                if (Regex.IsMatch(svgTag, @"\bheight\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
+                {
+                    updatedSvgTag = Regex.Replace(
+                        updatedSvgTag,
+                        @"\bheight\s*=\s*""[^""]*""",
+                        $"height=\"{newHeight.ToString("0.##", CultureInfo.InvariantCulture)}px\"",
+                        RegexOptions.IgnoreCase);
+                }
+                else
+                {
+                    int insertIndex = updatedSvgTag.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) + 4;
+                    updatedSvgTag = updatedSvgTag.Insert(insertIndex, $" height=\"{newHeight.ToString("0.##", CultureInfo.InvariantCulture)}px\"");
+                }
+
+                svg = svg.Replace(svgTag, updatedSvgTag);
+/*                Console.WriteLine("----- Updated SVG -----");
+                Console.WriteLine(updatedSvgTag);*/
             }
 
-            if (Regex.IsMatch(svgTag, @"\bheight\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
+
+            /**********************************
+             *            RECT TAG            * 
+             **********************************/
             {
-                updatedSvgTag = Regex.Replace(
-                    updatedSvgTag,
-                    @"\bheight\s*=\s*""[^""]*""",
-                    $"height=\"{newHeight.ToString("0.##", CultureInfo.InvariantCulture)}px\"",
-                    RegexOptions.IgnoreCase);
-            }
-            else
-            {
-                int insertIndex = updatedSvgTag.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) + 4;
-                updatedSvgTag = updatedSvgTag.Insert(insertIndex, $" height=\"{newHeight.ToString("0.##", CultureInfo.InvariantCulture)}px\"");
+                string rectTag = rectTagMatch.Value;
+                string updatedRectTag = rectTag;
+                if (Regex.IsMatch(rectTag, @"\bwidth\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
+                {
+                    updatedRectTag = Regex.Replace(
+                        updatedRectTag,
+                        @"\bwidth\s*=\s*""[^""]*""",
+                        $"width=\"{newWidth.ToString("0.##", CultureInfo.InvariantCulture)}\"",
+                        RegexOptions.IgnoreCase);
+                }
+                else
+                {
+                    int insertIndex = updatedRectTag.IndexOf("<rect", StringComparison.OrdinalIgnoreCase) + 4;
+                    updatedRectTag = updatedRectTag.Insert(insertIndex, $" width=\"{newWidth.ToString("0.##", CultureInfo.InvariantCulture)}\"");
+                }
+
+                if (Regex.IsMatch(updatedRectTag, @"\bheight\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
+                {
+                    updatedRectTag = Regex.Replace(
+                        updatedRectTag,
+                        @"\bheight\s*=\s*""[^""]*""",
+                        $"height=\"{newHeight.ToString("0.##", CultureInfo.InvariantCulture)}\"",
+                        RegexOptions.IgnoreCase);
+                }
+                else
+                {
+                    int insertIndex = updatedRectTag.IndexOf("<rect", StringComparison.OrdinalIgnoreCase) + 4;
+                    updatedRectTag = updatedRectTag.Insert(insertIndex, $" height=\"{newHeight.ToString("0.##", CultureInfo.InvariantCulture)}\"");
+                }
+                svg = svg.Replace(rectTag, updatedRectTag);
+/*                Console.WriteLine("----- Updated RECT -----");
+                Console.WriteLine(updatedRectTag);
+                Console.WriteLine($"Current: {svg}");*/
             }
 
-            return svg.Replace(svgTag, updatedSvgTag);
+            /**********************************
+             *           IMAGE TAG            * 
+             **********************************/
+            {
+                string imageTag = imageTagMatch.Value;
+                string updatedImageTag = imageTag;
+                if (Regex.IsMatch(imageTag, @"\bwidth\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
+                {
+                    updatedImageTag = Regex.Replace(
+                        updatedImageTag,
+                        @"\bwidth\s*=\s*""[^""]*""",
+                        $"width=\"{newWidth.ToString("0.##", CultureInfo.InvariantCulture)}px\"",
+                        RegexOptions.IgnoreCase);
+                }
+                else
+                {
+                    int insertIndex = updatedImageTag.IndexOf("<image", StringComparison.OrdinalIgnoreCase) + 4;
+                    updatedImageTag = updatedImageTag.Insert(insertIndex, $" width=\"{newWidth.ToString("0.##", CultureInfo.InvariantCulture)}px\"");
+                }
+
+                if (Regex.IsMatch(updatedImageTag, @"\bheight\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
+                {
+                    updatedImageTag = Regex.Replace(
+                        updatedImageTag,
+                        @"\bheight\s*=\s*""[^""]*""",
+                        $"height=\"{newHeight.ToString("0.##", CultureInfo.InvariantCulture)}px\"",
+                        RegexOptions.IgnoreCase);
+                }
+                else
+                {
+                    int insertIndex = updatedImageTag.IndexOf("<image", StringComparison.OrdinalIgnoreCase) + 4;
+                    updatedImageTag = updatedImageTag.Insert(insertIndex, $" height=\"{newHeight.ToString("0.##", CultureInfo.InvariantCulture)}px\"");
+                }
+                svg = svg.Replace(imageTag, updatedImageTag);
+/*                Console.WriteLine("----- Updated IMAGE -----");
+                Console.WriteLine(updatedImageTag);*/
+            }
+
+            return svg;
         }
     }
 }

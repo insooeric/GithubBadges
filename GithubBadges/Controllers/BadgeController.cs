@@ -15,6 +15,8 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http.HttpResults;
+using System.Management;
+using System.Linq;
 
 namespace GithubBadges.Controllers
 {
@@ -53,7 +55,8 @@ namespace GithubBadges.Controllers
                 {
                     throw new Exception("Error while configuring credentials: Credentials undefined :(");
                 }
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 throw new Exception("Error while configuring credentials: Something went wrong :(", ex);
             }
@@ -87,6 +90,11 @@ namespace GithubBadges.Controllers
                 }
 
                 var validExtensions = new[] { ".png", ".jpg", ".jpeg", ".svg" };
+                if (request.BadgeName.Contains("."))
+                {
+                    return BadRequest(new { Message = "Badge name shouldn't have extension or \".\"" });
+                }
+
                 var fileExtension = Path.GetExtension(request.BadgeFile.FileName).ToLower();
                 if (!validExtensions.Contains(fileExtension))
                 {
@@ -116,7 +124,7 @@ namespace GithubBadges.Controllers
                     }
                 }
 
-                string finalSVG = ImageHelper.ConvertToSVG(request.BadgeFile);
+                string finalSVG = ImageHelper.ConvertToSVG(request.BadgeFile, fileName);
 
                 string fullPath = $"{userBucketName}/{fileName}.svg";
 
@@ -386,7 +394,7 @@ namespace GithubBadges.Controllers
                 var matchingObjects = storageClient.ListObjectsAsync(BucketName, prefix);
                 Google.Apis.Storage.v1.Data.Object badgeObject = null;
 
-                await foreach(var file in matchingObjects)
+                await foreach (var file in matchingObjects)
                 {
                     string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file.Name);
                     if (fileNameWithoutExtension.Equals(fileName))
@@ -429,9 +437,14 @@ namespace GithubBadges.Controllers
             try
             {
                 string userFolderName = string.IsNullOrEmpty(user) ? "-default" : user;
-                int definedRow = row ?? 1;
-                int definedCol = col ?? 1;
+                int definedRow = row ?? 0;
+                int definedCol = col ?? 0;
                 bool defineFitContent = fitContent ?? false;
+
+                if(definedRow < 0 || definedCol < 0)
+                {
+                    return BadRequest(new { Message = "Either row or column cannot be less than 1" });
+                }
 
 
                 if (string.IsNullOrEmpty(badge))
@@ -462,81 +475,161 @@ namespace GithubBadges.Controllers
                 foreach (var item in imageList)
                 {
 
+
+                    /*                    if (!userFolderName.Equals("-default"))
+                                        {*/
                     // if folder name isn't default, find in that folder first
                     if (!userFolderName.Equals("-default"))
                     {
-                        string prefix = $"{userFolderName}/{item.imageName}";
-                        var matchingObjects = storageClient.ListObjectsAsync(BucketName, prefix);
-                        await foreach (var file in matchingObjects)
+                        // Console.WriteLine($"Checking {userFolderName} for {item.imageName}");
+                        string objectLongName = $"{userFolderName}/{item.imageName}.svg";
+                        try
                         {
-                            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file.Name);
-                            if (fileNameWithoutExtension.Equals(item.imageName))
-                            {
-                                item.imageObject = file;
-                                item.folderName = userFolderName;
-                                break;
-                            }
+                            item.imageObject = await storageClient.GetObjectAsync(BucketName, objectLongName);
+                        }
+                        catch (Google.GoogleApiException ex) when (ex.Error.Code == 404)
+                        {
+                            item.imageObject = null;
+                        }
+
+                        if (item.imageObject != null)
+                        {
+                            item.folderName = userFolderName;
+
+                            // ok, we need to reconfigure this to make sure memoryStream is in initial state
+                            using var memoryStream = new MemoryStream(); 
+                            await storageClient.DownloadObjectAsync(item.imageObject, memoryStream);
+                            item.imageInByte = memoryStream.ToArray();
+                            item.imageInSvg = Encoding.UTF8.GetString(item.imageInByte);
+                            // Console.WriteLine($"\nLoaded SVG:\n{item.imageInSvg}\n");
+
+                            string ext = Path.GetExtension(item.imageObject.Name).ToLower(); // should be .svg
+                            item.imageExtension = ext;
                         }
                     }
-
                     // if image object is still null, find in default
+                    // since upperblock checkes if userFolderName is not -default
+                    // it will automatically fallback to here:
+                    // IT"S NOT FKING FALLING BACK <= resolved by adding try catch
+                    
                     if (item.imageObject == null)
                     {
-                        string prefix = $"-default/{item.imageName}";
-                        var matchingObjects = storageClient.ListObjectsAsync(BucketName, prefix);
-                        await foreach (var file in matchingObjects)
+                        // Console.WriteLine($"Cannot find in {userFolderName}. Checking Default");
+                        string objectLongName = $"-default/{item.imageName}.svg";
+                        try
                         {
-                            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file.Name);
-                            if (fileNameWithoutExtension.Equals(item.imageName))
-                            {
-                                item.imageObject = file;
-                                item.folderName = "-default";
-                                break;
-                            }
+                            item.imageObject = await storageClient.GetObjectAsync(BucketName, objectLongName);
+                        }
+                        catch (Google.GoogleApiException ex) when (ex.Error.Code == 404)
+                        {
+                            item.imageObject = null;
+                        }
+
+                        if (item.imageObject != null)
+                        {
+                            item.folderName = "-default";
+
+
+                            using var memoryStream = new MemoryStream();
+                            await storageClient.DownloadObjectAsync(item.imageObject, memoryStream);
+                            item.imageInByte = memoryStream.ToArray();
+
+                            // ok... so we're gonna grab svg
+                            item.imageInSvg = Encoding.UTF8.GetString(item.imageInByte);
+                            // Console.WriteLine($"\nLoaded SVG:\n{item.imageInSvg}\n");
+                            // the thing is svg might have different format. it might not contain rect, width etc...
+                            // what if we parse svg to image then add svg container and image tag for it?
+                            // the result svg should look the same as non-default svg
+
+                            string tmpSvg = new string(Encoding.UTF8.GetString(item.imageInByte));
+                            byte[] tmpImg = ImageHelper.ConvertSvgToPng(tmpSvg);
+                            string base64Image = Convert.ToBase64String(tmpImg);
+                            int newHeight = 100;
+                            int newWidth = ImageHelper.GetWidthByHeight(newHeight, tmpImg);
+
+                            string newTmpSvg = $@"
+<svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" x=""0"" y=""0"">
+  <defs>
+    <clipPath id=""clip-{item.imageName}"">
+      <rect width=""{newWidth}"" height=""{newHeight}"" rx=""8"" />
+    </clipPath>
+  </defs>
+  <image href=""data:image/png;base64,{base64Image}"" width=""{newWidth}px"" height=""{newHeight}px"" 
+         clip-path=""url(#clip-{item.imageName})"" preserveAspectRatio=""xMidYMid meet"" />
+</svg>";
+                            item.imageInSvg = newTmpSvg;
+
+                            // Console.WriteLine($"\nLoaded SVG:\n{item.imageInSvg}\n");
+                            // THAT FUCING WORKS!
+
+                            string ext = Path.GetExtension(item.imageObject.Name).ToLower(); // should be .svg
+                            item.imageExtension = ext;
                         }
                     }
 
+                    // if image object is still null, return error
                     if (item.imageObject == null)
                     {
                         return BadRequest(new { Message = $"Could not find the badge named \"{item.imageName}\"" });
                     }
-
-                    // in this point, it's guarenteed that image object exists
-                    // we're gonna grab image as byte[] as well as extension
-                    using var memoryStream = new MemoryStream();
-                    await storageClient.DownloadObjectAsync(item.imageObject, memoryStream);
-
-                    item.imageInByte = memoryStream.ToArray();
-
-                    string ext = Path.GetExtension(item.imageObject.Name).ToLower(); // this should be always svg
-                    item.imageExtension = ext;
                 }
 
-/*                foreach (var item in imageList)
+/*                Console.WriteLine("---------------------------------------------");
+                Console.WriteLine("List of Images");
+                foreach (var image in imageList)
                 {
-                    Console.WriteLine($"----------------------");
-                    Console.WriteLine($"Object exists? {(item.imageObject != null ? "Yes" : "No")}");
-                    Console.WriteLine($"Image byte exists?: {(item.imageInByte != null ? "Yes" : "No")}");
-                    Console.WriteLine($"Image folder: {item.folderName}");
-                    Console.WriteLine($"Image name: {item.imageName}");
-                    Console.WriteLine($"Image type: {item.imageExtension}\n");
-                }*/
+                    Console.WriteLine(image.imageInSvg);
+                    Console.WriteLine();
+                }
+                Console.WriteLine("---------------------------------------------");*/
+
+
+                /*                foreach (var item in imageList)
+                                {
+                                    Console.WriteLine($"----------------------");
+                                    Console.WriteLine($"Object exists? {(item.imageObject != null ? "Yes" : "No")}");
+                                    Console.WriteLine($"Image byte exists?: {(item.imageInByte != null ? "Yes" : "No")}");
+                                    Console.WriteLine($"Image svg exists?: {(item.imageInSvg != null ? "Yes" : "No")}");
+                                    Console.WriteLine($"Image folder: {item.folderName}");
+                                    Console.WriteLine($"Image name: {item.imageName}");
+                                    Console.WriteLine($"Image type: {item.imageExtension}\n");
+                                }*/
+
+
 
                 string svgContent = "";
 
                 if (imageList.Count == 1)
                 {
-                    svgContent = Encoding.UTF8.GetString(imageList[0].imageInByte);
-                    svgContent = ImageHelper.Resize(svgContent, ImageHelper.GetWidthByHeight(40, svgContent), 40);
+                    // svgContent = Encoding.UTF8.GetString(imageList[0].imageInByte);
+
+                    // Console.WriteLine($"\nLoaded SVG:\n{svgContent}\n");
+                    svgContent = ImageHelper.Resize(imageList[0].imageInSvg, ImageHelper.GetWidthByHeight(40, imageList[0].imageInSvg), 40);
+                    // BOOM!
                 }
                 else if (imageList.Count > 1) // in case multiple images
                 {
+/*                    Console.WriteLine("---------------------------------------------");
+                    Console.WriteLine("Render multiple images");
+                    foreach (var image in imageList)
+                    {
+                        Console.WriteLine(image.imageInSvg);
+                        Console.WriteLine();
+                    }*/
+                    // TODO: THIS IS A ROUGH VERSION. NEED TO ADD ENHANCED LOGIC
+                    // do it in MultipleSVGCreator.Create()
                     if (definedRow > imageList.Count || definedCol > imageList.Count)
                     {
                         return BadRequest(new { Message = $"Error: both Row and Column cannot exceed number of badges" });
                     }
-
-                    svgContent = MultipleSVGCreator.Create(imageList, definedRow, definedCol, defineFitContent);
+                    try
+                    {
+                        svgContent = MultipleSVGCreator.Create(imageList, definedRow, definedCol, defineFitContent);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        return BadRequest(new { Message = $"Error: {ex.Message}" });
+                    }
                 }
 
                 return Content(svgContent, "image/svg+xml");

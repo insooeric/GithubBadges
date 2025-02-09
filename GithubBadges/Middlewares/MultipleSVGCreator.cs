@@ -15,32 +15,87 @@ namespace GithubBadges.Middlewares
             List<(string svg, double width)> badgeSvgs = new List<(string svg, double width)>();
             foreach (var image in imageObjects)
             {
-                string badgeSvg = Encoding.UTF8.GetString(image.imageInByte); //= SingleSVGCreator.Create(image.folderName, image.imageInByte, image.imageExtension);
-                badgeSvg = ImageHelper.Resize(badgeSvg, ImageHelper.GetWidthByHeight(40, badgeSvg), 40);
-                var widthMatch = Regex.Match(
-                    badgeSvg,
-                    @"<svg[^>]*\bwidth\s*=\s*[""']([\d\.]+)(?:\s*px)?[""']",
-                    RegexOptions.IgnoreCase);
+                // Console.WriteLine("yeet");
+                //string badgeSvg = Encoding.UTF8.GetString(image.imageInByte); 
+                //= SingleSVGCreator.Create(image.folderName, image.imageInByte, image.imageExtension);
 
-                double badgeWidth = targetHeight;
-                if (!fitContent && widthMatch.Success &&
-                    double.TryParse(widthMatch.Groups[1].Value, out double parsedWidth))
-                {
-                    badgeWidth = parsedWidth;
-                }
+                // WARNING: HEIGHT OF SVG IS ALWAYS 100
 
+                string badgeSvg = new string(image.imageInSvg);
+                int badgeWidth = ImageHelper.GetWidthByHeight(40, badgeSvg);
+                badgeSvg = ImageHelper.Resize(badgeSvg, badgeWidth, 40);
                 badgeSvgs.Add((badgeSvg, badgeWidth));
             }
 
-            foreach (var badgeSvg in badgeSvgs)
-            {
-                Console.WriteLine(badgeSvg.svg);
-            }
+            /*            foreach (var badgeSvg in badgeSvgs)
+                        {
+                            Console.WriteLine(badgeSvg.svg);
+                        }*/
 
-            if (row == 1 && col == 1)
+            // ENHANCED LOGIC
+            // Note that ALWAYS row & col <= badgeSvgs.Count
+
+            // 1. if both are 0, meaning undefined, we're gonna automatically display flow
+            if (row == 0 && col == 0)
             {
+                row = 1;
                 col = badgeSvgs.Count;
             }
+            // 2. if row > 0 and col is 0, we're gonna adjust col
+            else if (row > 0 && col == 0)
+            {
+                col = badgeSvgs.Count / row;
+                if (badgeSvgs.Count % row > 0)
+                {
+                    col++;
+                }
+            }
+            // 2. if col > 0 and row is 0, we're gonna adjust row
+            else if (col > 0 && row == 0)
+            {
+                row = badgeSvgs.Count / col;
+                if (badgeSvgs.Count % col > 0)
+                {
+                    row++;
+                }
+            }
+            // 3. if col > 0 and row is 0, we're gonna calculate if it's possible
+            else if (row > 0 && col > 0)
+            {
+                int validRow = badgeSvgs.Count / col;
+                if (badgeSvgs.Count % col > 0)
+                {
+                    validRow++;
+                }
+
+                if (validRow != row)
+                {
+                    throw new ArgumentException(
+                        $"Invalid grid dimensions: expected {row} rows but calculated {validRow} rows based on the number of images."
+                    );
+                }
+
+
+                int validCol = badgeSvgs.Count / row;
+                if (badgeSvgs.Count % row > 0)
+                {
+                    validCol++;
+                }
+
+                if (validCol != col)
+                {
+                    throw new ArgumentException(
+                        $"Invalid grid dimensions: expected {col} columns but calculated {validCol} rows based on the number of images."
+                    );
+                }
+            }
+
+            Console.WriteLine($"Row: {row} Column: {col}");
+
+            // TODO: CHECK LOGICAL SPECIFICATIONS HERE
+            // TODO: CHECK LOGICAL SPECIFICATIONS HERE
+            // TODO: CHECK LOGICAL SPECIFICATIONS HERE
+            // TODO: CHECK LOGICAL SPECIFICATIONS HERE
 
             double[] columnWidths = new double[col];
             for (int j = 0; j < col; j++)
