@@ -441,7 +441,7 @@ namespace GithubBadges.Controllers
                 int definedCol = col ?? 0;
                 bool defineFitContent = fitContent ?? false;
 
-                if(definedRow < 0 || definedCol < 0)
+                if (definedRow < 0 || definedCol < 0)
                 {
                     return BadRequest(new { Message = "Either row or column cannot be less than 1" });
                 }
@@ -497,7 +497,7 @@ namespace GithubBadges.Controllers
                             item.folderName = userFolderName;
 
                             // ok, we need to reconfigure this to make sure memoryStream is in initial state
-                            using var memoryStream = new MemoryStream(); 
+                            using var memoryStream = new MemoryStream();
                             await storageClient.DownloadObjectAsync(item.imageObject, memoryStream);
                             item.imageInByte = memoryStream.ToArray();
                             item.imageInSvg = Encoding.UTF8.GetString(item.imageInByte);
@@ -511,7 +511,7 @@ namespace GithubBadges.Controllers
                     // since upperblock checkes if userFolderName is not -default
                     // it will automatically fallback to here:
                     // IT"S NOT FKING FALLING BACK <= resolved by adding try catch
-                    
+
                     if (item.imageObject == null)
                     {
                         // Console.WriteLine($"Cannot find in {userFolderName}. Checking Default");
@@ -525,30 +525,28 @@ namespace GithubBadges.Controllers
                             item.imageObject = null;
                         }
 
-                        if (item.imageObject != null)
-                        {
-                            item.folderName = "-default";
+                        item.folderName = "-default";
 
 
-                            using var memoryStream = new MemoryStream();
-                            await storageClient.DownloadObjectAsync(item.imageObject, memoryStream);
-                            item.imageInByte = memoryStream.ToArray();
+                        using var memoryStream = new MemoryStream();
+                        await storageClient.DownloadObjectAsync(item.imageObject, memoryStream);
+                        item.imageInByte = memoryStream.ToArray();
 
-                            // ok... so we're gonna grab svg
-                            item.imageInSvg = Encoding.UTF8.GetString(item.imageInByte);
-                            // Console.WriteLine($"\nLoaded SVG:\n{item.imageInSvg}\n");
-                            // the thing is svg might have different format. it might not contain rect, width etc...
-                            // what if we parse svg to image then add svg container and image tag for it?
-                            // the result svg should look the same as non-default svg
+                        // ok... so we're gonna grab svg
+                        item.imageInSvg = Encoding.UTF8.GetString(item.imageInByte);
+                        // Console.WriteLine($"\nLoaded SVG:\n{item.imageInSvg}\n");
+                        // the thing is svg might have different format. it might not contain rect, width etc...
+                        // what if we parse svg to image then add svg container and image tag for it?
+                        // the result svg should look the same as non-default svg
 
-                            string tmpSvg = new string(Encoding.UTF8.GetString(item.imageInByte));
-                            byte[] tmpImg = ImageHelper.ConvertSvgToPng(tmpSvg);
-                            string base64Image = Convert.ToBase64String(tmpImg);
-                            int newHeight = 100;
-                            int newWidth = ImageHelper.GetWidthByHeight(newHeight, tmpImg);
+                        string tmpSvg = new string(Encoding.UTF8.GetString(item.imageInByte));
+                        byte[] tmpImg = ImageHelper.ConvertSvgToPng(tmpSvg);
+                        string base64Image = Convert.ToBase64String(tmpImg);
+                        int newHeight = 100;
+                        int newWidth = ImageHelper.GetWidthByHeight(newHeight, tmpImg);
 
-                            string newTmpSvg = $@"
-<svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" x=""0"" y=""0"">
+                        string newTmpSvg = $@"
+<svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" x=""0"" y=""0"" fill=""none"">
   <defs>
     <clipPath id=""clip-{item.imageName}"">
       <rect width=""{newWidth}"" height=""{newHeight}"" rx=""8"" />
@@ -557,14 +555,15 @@ namespace GithubBadges.Controllers
   <image href=""data:image/png;base64,{base64Image}"" width=""{newWidth}px"" height=""{newHeight}px"" 
          clip-path=""url(#clip-{item.imageName})"" preserveAspectRatio=""xMidYMid meet"" />
 </svg>";
-                            item.imageInSvg = newTmpSvg;
 
-                            // Console.WriteLine($"\nLoaded SVG:\n{item.imageInSvg}\n");
-                            // THAT FUCING WORKS!
+                        // Console.WriteLine(newTmpSvg);
+                        item.imageInSvg = newTmpSvg;
 
-                            string ext = Path.GetExtension(item.imageObject.Name).ToLower(); // should be .svg
-                            item.imageExtension = ext;
-                        }
+                        // Console.WriteLine($"\nLoaded SVG:\n{item.imageInSvg}\n");
+                        // THAT FUCING WORKS!
+
+                        string ext = Path.GetExtension(item.imageObject.Name).ToLower(); // should be .svg
+                        item.imageExtension = ext;
                     }
 
                     // if image object is still null, return error
@@ -574,14 +573,14 @@ namespace GithubBadges.Controllers
                     }
                 }
 
-/*                Console.WriteLine("---------------------------------------------");
-                Console.WriteLine("List of Images");
-                foreach (var image in imageList)
-                {
-                    Console.WriteLine(image.imageInSvg);
-                    Console.WriteLine();
-                }
-                Console.WriteLine("---------------------------------------------");*/
+                /*                Console.WriteLine("---------------------------------------------");
+                                Console.WriteLine("List of Images");
+                                foreach (var image in imageList)
+                                {
+                                    Console.WriteLine(image.imageInSvg);
+                                    Console.WriteLine();
+                                }
+                                Console.WriteLine("---------------------------------------------");*/
 
 
                 /*                foreach (var item in imageList)
@@ -609,13 +608,13 @@ namespace GithubBadges.Controllers
                 }
                 else if (imageList.Count > 1) // in case multiple images
                 {
-/*                    Console.WriteLine("---------------------------------------------");
-                    Console.WriteLine("Render multiple images");
-                    foreach (var image in imageList)
-                    {
-                        Console.WriteLine(image.imageInSvg);
-                        Console.WriteLine();
-                    }*/
+                    /*                    Console.WriteLine("---------------------------------------------");
+                                        Console.WriteLine("Render multiple images");
+                                        foreach (var image in imageList)
+                                        {
+                                            Console.WriteLine(image.imageInSvg);
+                                            Console.WriteLine();
+                                        }*/
                     // TODO: THIS IS A ROUGH VERSION. NEED TO ADD ENHANCED LOGIC
                     // do it in MultipleSVGCreator.Create()
                     if (definedRow > imageList.Count || definedCol > imageList.Count)

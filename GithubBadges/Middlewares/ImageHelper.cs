@@ -108,7 +108,8 @@ namespace GithubBadges.Middlewares
                 var readSettings = new MagickReadSettings
                 {
                     Format = MagickFormat.Svg,
-                    Density = new Density(300)
+                    Density = new Density(300),
+                    BackgroundColor = MagickColors.Transparent
                 };
 
                 using (var image = new MagickImage(svgStream, readSettings))
