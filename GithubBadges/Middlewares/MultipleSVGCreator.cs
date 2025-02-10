@@ -50,7 +50,7 @@ namespace GithubBadges.Middlewares
                     col++;
                 }
             }
-            // 2. if col > 0 and row is 0, we're gonna adjust row
+            // 3. if col > 0 and row is 0, we're gonna adjust row
             else if (col > 0 && row == 0)
             {
                 row = badgeSvgs.Count / col;
@@ -59,43 +59,38 @@ namespace GithubBadges.Middlewares
                     row++;
                 }
             }
-            // 3. if col > 0 and row is 0, we're gonna calculate if it's possible
-            else if (row > 0 && col > 0)
+
+            // check under-sized grid
+            if (row * col < badgeSvgs.Count)
             {
-                int validRow = badgeSvgs.Count / col;
-                if (badgeSvgs.Count % col > 0)
-                {
-                    validRow++;
-                }
-
-                if (validRow != row)
-                {
-                    throw new ArgumentException(
-                        $"Invalid grid dimensions: expected {row} rows but calculated {validRow} rows based on the number of images."
-                    );
-                }
+                throw new ArgumentException(
+                    $"Invalid grid dimensions: Number of items exceeds the number of cell of the grid."
+                );
+            }
+            // check oversized grid
+            //Console.WriteLine(requiredRows);
 
 
-                int validCol = badgeSvgs.Count / row;
-                if (badgeSvgs.Count % row > 0)
-                {
-                    validCol++;
-                }
-
-                if (validCol != col)
-                {
-                    throw new ArgumentException(
-                        $"Invalid grid dimensions: expected {col} columns but calculated {validCol} rows based on the number of images."
-                    );
-                }
+            // check valid cols
+            int requiredRows = (int)Math.Ceiling(badgeSvgs.Count / (double)col);
+            if (row != requiredRows)
+            {
+                throw new ArgumentException(
+                    $"Invalid grid dimensions: Exactly {requiredRows} rows are needed for {badgeSvgs.Count} items."
+                );
             }
 
-            Console.WriteLine($"Row: {row} Column: {col}");
+            //Console.WriteLine($"Row: {row} Column: {col}");
+
+            //***********************************************
+            // in this point, row and column are always valid.
+            //***********************************************
 
             // TODO: CHECK LOGICAL SPECIFICATIONS HERE
             // TODO: CHECK LOGICAL SPECIFICATIONS HERE
             // TODO: CHECK LOGICAL SPECIFICATIONS HERE
             // TODO: CHECK LOGICAL SPECIFICATIONS HERE
+
 
             double[] columnWidths = new double[col];
             for (int j = 0; j < col; j++)
