@@ -556,7 +556,7 @@ namespace GithubBadges.Controllers
          clip-path=""url(#clip-{item.imageName})"" preserveAspectRatio=""xMidYMid meet"" />
 </svg>";
 
-                        // Console.WriteLine(newTmpSvg);
+                        //  Console.WriteLine(newTmpSvg);
                         item.imageInSvg = newTmpSvg;
 
                         // Console.WriteLine($"\nLoaded SVG:\n{item.imageInSvg}\n");
