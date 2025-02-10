@@ -11,6 +11,10 @@ using System.Diagnostics;
 using ImageMagick;
 using System.Management;
 using System.Globalization;
+using Svg.Skia;
+using Aspose.Svg;
+using Aspose.Svg.Converters;
+using Aspose.Svg.Saving;
 
 
 namespace GithubBadges.Middlewares
@@ -54,6 +58,7 @@ namespace GithubBadges.Middlewares
             }
             else if (extension.Equals(".svg"))
             {
+                Console.WriteLine("Parsing svg to png");
                 byte[] fileBytes;
                 using (var memoryStream = new MemoryStream())
                 {
@@ -65,6 +70,9 @@ namespace GithubBadges.Middlewares
                 subSvgContent = RemoveComments(subSvgContent);
                 // subSvgContent = AddClipPathAttribute(subSvgContent);
                 subSvgContent = Regex.Replace(subSvgContent, @"<\?xml[^>]+\?>", string.Empty, RegexOptions.IgnoreCase);
+                // Console.WriteLine(subSvgContent);
+                // OK. nothing WRONG till this point
+
 
                 byte[] svgInImageBytes = ConvertSvgToPng(subSvgContent);
 
@@ -83,7 +91,8 @@ namespace GithubBadges.Middlewares
   <image href=""data:image/png;base64,{base64Image}"" width=""{newWidth}px"" height=""{newHeight}px"" 
          clip-path=""url(#clip-{fileName})"" preserveAspectRatio=""xMidYMid meet"" />
 </svg>";
-
+                Console.WriteLine("Final SVG:");
+                Console.WriteLine(svgContent);
                 /*                Console.WriteLine("");
                                 Console.WriteLine($"Computed dimensions: width:{newWidth} height:{newHeight}");
                                 Console.WriteLine(subSvgContent);
@@ -94,6 +103,7 @@ namespace GithubBadges.Middlewares
 
             if (string.IsNullOrWhiteSpace(svgContent))
             {
+                Console.WriteLine("Something went wrong :(");
                 throw new NotSupportedException("Unsupported file type for conversion to SVG.");
             }
 
@@ -101,48 +111,92 @@ namespace GithubBadges.Middlewares
             return svgContent;
         }
 
+
         public static byte[] ConvertSvgToPng(string svgContent)
         {
-            using (var svgStream = new MemoryStream(Encoding.UTF8.GetBytes(svgContent)))
-            {
-                var readSettings = new MagickReadSettings
-                {
-                    Format = MagickFormat.Svg,
-                    Density = new Density(300),
-                    BackgroundColor = MagickColors.Transparent
-                };
+            Console.WriteLine("Convert following to png");
+            Console.WriteLine(svgContent);
+            Console.WriteLine("\n------------------------");
 
-                using (var image = new MagickImage(svgStream, readSettings))
+
+            // TestSKSvg();
+            var svg = new Svg.Skia.SKSvg();
+            using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(svgContent)))
+            {
+                svg.Load(stream);
+            }
+
+            if (svg.Picture == null)
+            {
+                throw new Exception("Failed to load SVG content.");
+            }
+
+            SKRect svgRect = svg.Picture.CullRect;
+            int width = (int)Math.Ceiling(svgRect.Width);
+            int height = (int)Math.Ceiling(svgRect.Height);
+
+            using (var bitmap = new SKBitmap(width, height))
+            {
+                using (var canvas = new SKCanvas(bitmap))
                 {
-                    image.Format = MagickFormat.Png;
-                    return image.ToByteArray();
+                    canvas.Clear(SKColors.Transparent);
+                    canvas.DrawPicture(svg.Picture);
+
+
+                }
+
+                using (var image = SKImage.FromBitmap(bitmap))
+                {
+                    using (var data = image.Encode(SKEncodedImageFormat.Png, quality: 100))
+                    {
+                        return data.ToArray();
+                    }
                 }
             }
         }
 
-/*        public static string AddClipPathAttribute(string svgContent)
-        {
-            if (string.IsNullOrWhiteSpace(svgContent))
-                return svgContent;
+        /*        public static byte[] ConvertSvgToPng(string svgContent)
+                {
+                    using (var svgStream = new MemoryStream(Encoding.UTF8.GetBytes(svgContent)))
+                    {
+                        var readSettings = new MagickReadSettings
+                        {
+                            Format = MagickFormat.Svg,
+                            Density = new Density(300),
+                            BackgroundColor = MagickColors.Transparent
+                        };
 
-            int svgStartIndex = svgContent.IndexOf("<svg", StringComparison.OrdinalIgnoreCase);
-            if (svgStartIndex == -1)
-                return svgContent;
+                        using (var image = new MagickImage(svgStream, readSettings))
+                        {
+                            image.Format = MagickFormat.Png;
+                            return image.ToByteArray();
+                        }
+                    }
+                }*/
 
-            int svgTagEndIndex = svgContent.IndexOf('>', svgStartIndex);
-            if (svgTagEndIndex == -1)
-                return svgContent;
+        /*        public static string AddClipPathAttribute(string svgContent)
+                {
+                    if (string.IsNullOrWhiteSpace(svgContent))
+                        return svgContent;
 
-            string firstSvgTag = svgContent.Substring(svgStartIndex, svgTagEndIndex - svgStartIndex + 1);
+                    int svgStartIndex = svgContent.IndexOf("<svg", StringComparison.OrdinalIgnoreCase);
+                    if (svgStartIndex == -1)
+                        return svgContent;
 
-            if (!Regex.IsMatch(firstSvgTag, @"\bclip-path\s*=", RegexOptions.IgnoreCase))
-            {
-                string updatedTag = firstSvgTag.TrimEnd('>', ' ') + " clip-path=\"url(#clip)\">";
-                svgContent = svgContent.Replace(firstSvgTag, updatedTag);
-            }
+                    int svgTagEndIndex = svgContent.IndexOf('>', svgStartIndex);
+                    if (svgTagEndIndex == -1)
+                        return svgContent;
 
-            return svgContent;
-        }*/
+                    string firstSvgTag = svgContent.Substring(svgStartIndex, svgTagEndIndex - svgStartIndex + 1);
+
+                    if (!Regex.IsMatch(firstSvgTag, @"\bclip-path\s*=", RegexOptions.IgnoreCase))
+                    {
+                        string updatedTag = firstSvgTag.TrimEnd('>', ' ') + " clip-path=\"url(#clip)\">";
+                        svgContent = svgContent.Replace(firstSvgTag, updatedTag);
+                    }
+
+                    return svgContent;
+                }*/
 
         public static string RemoveComments(string svgContent)
         {
@@ -252,7 +306,7 @@ namespace GithubBadges.Middlewares
             throw new FormatException($"Unable to parse dimension: {dimension}");
         }
 
-        // ISSUE WITH RESIZE
+        // ISSUE WITH RESIZE <= solved
 
         public static string Resize(string svg, double newWidth, double newHeight)
         {
