@@ -58,7 +58,7 @@ namespace GithubBadges.Middlewares
             }
             else if (extension.Equals(".svg"))
             {
-                Console.WriteLine("Parsing svg to png");
+                //Console.WriteLine("Parsing svg to png");
                 byte[] fileBytes;
                 using (var memoryStream = new MemoryStream())
                 {
@@ -91,8 +91,8 @@ namespace GithubBadges.Middlewares
   <image href=""data:image/png;base64,{base64Image}"" width=""{newWidth}px"" height=""{newHeight}px"" 
          clip-path=""url(#clip-{fileName})"" preserveAspectRatio=""xMidYMid meet"" />
 </svg>";
-                Console.WriteLine("Final SVG:");
-                Console.WriteLine(svgContent);
+                //Console.WriteLine("Final SVG:");
+                //Console.WriteLine(svgContent);
                 /*                Console.WriteLine("");
                                 Console.WriteLine($"Computed dimensions: width:{newWidth} height:{newHeight}");
                                 Console.WriteLine(subSvgContent);
@@ -103,7 +103,7 @@ namespace GithubBadges.Middlewares
 
             if (string.IsNullOrWhiteSpace(svgContent))
             {
-                Console.WriteLine("Something went wrong :(");
+                // Console.WriteLine("Something went wrong :(");
                 throw new NotSupportedException("Unsupported file type for conversion to SVG.");
             }
 
@@ -114,9 +114,9 @@ namespace GithubBadges.Middlewares
 
         public static byte[] ConvertSvgToPng(string svgContent)
         {
-            Console.WriteLine("Convert following to png");
+/*            Console.WriteLine("Convert following to png");
             Console.WriteLine(svgContent);
-            Console.WriteLine("\n------------------------");
+            Console.WriteLine("\n------------------------");*/
 
 
             // TestSKSvg();
