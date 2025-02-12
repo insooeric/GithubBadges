@@ -606,7 +606,7 @@ namespace GithubBadges.Controllers
                 {
                     // svgContent = Encoding.UTF8.GetString(imageList[0].imageInByte);
 
-                    // Console.WriteLine($"\nLoaded SVG:\n{svgContent}\n");
+                    // Console.WriteLine($"\nLoaded SVG:\n{imageList[0].imageInSvg}\n");
                     //svgContent = ImageHelper.ResizeSVG(imageList[0].imageInSvg, ImageHelper.GetWidthByHeight(40, imageList[0].imageInSvg), 40);
                     int newHeight = 40;
                     int newWidth = ImageHelper.GetWidthByHeight(newHeight, imageList[0].imageInSvg);

@@ -49,10 +49,10 @@ namespace GithubBadges.Middlewares
 <svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" x=""0"" y=""0"">
   <defs>
     <clipPath id=""clip-{fileName}"">
-      <rect width=""{newWidth}"" height=""{newHeight}"" rx=""8"" />
+      <rect width=""100%"" height=""100%"" rx=""8"" />
     </clipPath>
   </defs>
-  <image href=""data:{mimeType};base64,{base64Image}"" width=""{newWidth}px"" height=""{newHeight}px"" 
+  <image href=""data:{mimeType};base64,{base64Image}"" width=""100%"" height=""100%"" 
          clip-path=""url(#clip-{fileName})"" preserveAspectRatio=""xMidYMid meet"" />
 </svg>";
             }
