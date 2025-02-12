@@ -403,7 +403,8 @@ namespace GithubBadges.Middlewares
             return result;
         }
 
-        public static string Resize(string svg, double newWidth, double newHeight)
+        // => USE ResizeSVG()
+        /*public static string Resize(string svg, double newWidth, double newHeight)
         {
             // Console.WriteLine(svg);
             // ok, so we need to grab three things: outer <svg> tag, rect tag in <defs>, <image> tag
@@ -417,9 +418,9 @@ namespace GithubBadges.Middlewares
                 return svg;
             }
 
-            /**********************************
+            *//**********************************
              *            SVG TAG             * 
-             **********************************/
+             **********************************//*
             {
                 string svgTag = svgTagMatch.Value;
                 string updatedSvgTag = svgTag;
@@ -454,14 +455,14 @@ namespace GithubBadges.Middlewares
                 }
 
                 svg = svg.Replace(svgTag, updatedSvgTag);
-/*                Console.WriteLine("----- Updated SVG -----");
-                Console.WriteLine(updatedSvgTag);*/
+*//*                Console.WriteLine("----- Updated SVG -----");
+                Console.WriteLine(updatedSvgTag);*//*
             }
 
 
-            /**********************************
+            *//**********************************
              *            RECT TAG            * 
-             **********************************/
+             **********************************//*
             {
                 string rectTag = rectTagMatch.Value;
                 string updatedRectTag = rectTag;
@@ -493,14 +494,14 @@ namespace GithubBadges.Middlewares
                     updatedRectTag = updatedRectTag.Insert(insertIndex, $" height=\"{newHeight.ToString("0.##", CultureInfo.InvariantCulture)}\"");
                 }
                 svg = svg.Replace(rectTag, updatedRectTag);
-/*                Console.WriteLine("----- Updated RECT -----");
+*//*                Console.WriteLine("----- Updated RECT -----");
                 Console.WriteLine(updatedRectTag);
-                Console.WriteLine($"Current: {svg}");*/
+                Console.WriteLine($"Current: {svg}");*//*
             }
 
-            /**********************************
+            *//**********************************
              *           IMAGE TAG            * 
-             **********************************/
+             **********************************//*
             {
                 string imageTag = imageTagMatch.Value;
                 string updatedImageTag = imageTag;
@@ -532,11 +533,11 @@ namespace GithubBadges.Middlewares
                     updatedImageTag = updatedImageTag.Insert(insertIndex, $" height=\"{newHeight.ToString("0.##", CultureInfo.InvariantCulture)}px\"");
                 }
                 svg = svg.Replace(imageTag, updatedImageTag);
-/*                Console.WriteLine("----- Updated IMAGE -----");
-                Console.WriteLine(updatedImageTag);*/
+*//*                Console.WriteLine("----- Updated IMAGE -----");
+                Console.WriteLine(updatedImageTag);*//*
             }
 
             return svg;
-        }
+        }*/
     }
 }

@@ -436,14 +436,14 @@ namespace GithubBadges.Controllers
 
         [HttpGet("")]
         // example: https://localhost:32769/api/badge?user=insooeric&badge=auth
-        public async Task<IActionResult> GetBadgeAsync([FromQuery] string? user, [FromQuery] string badge, [FromQuery] int? row, [FromQuery] int? col, [FromQuery] bool? fitContent)
+        public async Task<IActionResult> GetBadgeAsync([FromQuery] string? user, [FromQuery] string badge, [FromQuery] int? row, [FromQuery] int? col, [FromQuery] bool? fit)
         {
             try
             {
                 string userFolderName = string.IsNullOrEmpty(user) ? "-default" : user;
                 int definedRow = row ?? 0;
                 int definedCol = col ?? 0;
-                bool defineFitContent = fitContent ?? false;
+                bool defineFitContent = fit ?? false;
 
                 if (definedRow < 0 || definedCol < 0)
                 {
@@ -553,10 +553,10 @@ namespace GithubBadges.Controllers
 <svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" x=""0"" y=""0"" fill=""none"">
   <defs>
     <clipPath id=""clip-{item.imageName}"">
-      <rect width=""{newWidth}"" height=""{newHeight}"" rx=""8"" />
+      <rect width=""100%"" height=""100%"" rx=""8"" />
     </clipPath>
   </defs>
-  <image href=""data:image/png;base64,{base64Image}"" width=""{newWidth}px"" height=""{newHeight}px"" 
+  <image href=""data:image/png;base64,{base64Image}"" width=""100%"" height=""100%"" 
          clip-path=""url(#clip-{item.imageName})"" preserveAspectRatio=""xMidYMid meet"" />
 </svg>";
 
@@ -597,7 +597,7 @@ namespace GithubBadges.Controllers
                                     Console.WriteLine($"Image name: {item.imageName}");
                                     Console.WriteLine($"Image type: {item.imageExtension}\n");
                                 }*/
-
+                
 
 
                 string svgContent = "";

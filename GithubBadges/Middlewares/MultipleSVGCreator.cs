@@ -13,18 +13,28 @@ namespace GithubBadges.Middlewares
             const double gap = 5;
 
             List<(string svg, double width)> badgeSvgs = new List<(string svg, double width)>();
+
+
+            Console.WriteLine($"Constrain width and height: {fitContent}");
+
             foreach (var image in imageObjects)
             {
                 // Console.WriteLine("yeet");
                 //string badgeSvg = Encoding.UTF8.GetString(image.imageInByte); 
                 //= SingleSVGCreator.Create(image.folderName, image.imageInByte, image.imageExtension);
 
-                // WARNING: HEIGHT OF SVG IS ALWAYS 100
+                // WARNING: INITIAL HEIGHT OF SVG IS ALWAYS 100
 
                 string badgeSvg = new string(image.imageInSvg);
-                int badgeWidth = ImageHelper.GetWidthByHeight(40, badgeSvg);
-                badgeSvg = ImageHelper.Resize(badgeSvg, badgeWidth, 40);
-                badgeSvgs.Add((badgeSvg, badgeWidth));
+                int newHeight = 40;
+                int newWidth = newHeight; // fallback
+                if (!fitContent)
+                {
+                    newWidth = ImageHelper.GetWidthByHeight(newHeight, badgeSvg);
+                }
+                //int badgeWidth = ImageHelper.GetWidthByHeight(40, badgeSvg);
+                badgeSvg = ImageHelper.ResizeSVG(badgeSvg, newWidth, newHeight);
+                badgeSvgs.Add((badgeSvg, newWidth));
             }
 
             /*            foreach (var badgeSvg in badgeSvgs)
