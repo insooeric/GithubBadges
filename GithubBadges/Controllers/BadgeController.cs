@@ -126,7 +126,7 @@ namespace GithubBadges.Controllers
 
                 string finalSVG = ImageHelper.ConvertToSVG(request.BadgeFile, fileName);
 
-                // Console.WriteLine(finalSVG);
+                //Console.WriteLine(finalSVG);
 
                 // return BadRequest(new { Message = $"Error: Testing" }); // MAKE SURE TO REMOVE THIS LINE
 
