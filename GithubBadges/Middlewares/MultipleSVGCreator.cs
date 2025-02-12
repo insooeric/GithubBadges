@@ -15,7 +15,7 @@ namespace GithubBadges.Middlewares
             List<(string svg, double width)> badgeSvgs = new List<(string svg, double width)>();
 
 
-            Console.WriteLine($"Constrain width and height: {fitContent}");
+            //Console.WriteLine($"Constrain width and height: {fitContent}");
 
             foreach (var image in imageObjects)
             {
