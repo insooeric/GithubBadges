@@ -58,7 +58,7 @@ namespace GithubBadges.Middlewares
             }
             else if (extension.Equals(".svg"))
             {
-                //Console.WriteLine("Parsing svg to png");
+                // Console.WriteLine("Parsing svg to png");
                 byte[] fileBytes;
                 using (var memoryStream = new MemoryStream())
                 {
@@ -67,37 +67,56 @@ namespace GithubBadges.Middlewares
                 }
 
                 string subSvgContent = Encoding.UTF8.GetString(fileBytes);
+
+                // Console.WriteLine($"\nInitial SVG:\n{subSvgContent}\n----------------");
                 subSvgContent = RemoveComments(subSvgContent);
                 // subSvgContent = AddClipPathAttribute(subSvgContent);
                 subSvgContent = Regex.Replace(subSvgContent, @"<\?xml[^>]+\?>", string.Empty, RegexOptions.IgnoreCase);
-                // Console.WriteLine(subSvgContent);
+                subSvgContent = AddClipPathAttribute(subSvgContent, fileName);
+
+                
                 // OK. nothing WRONG till this point
 
 
-                byte[] svgInImageBytes = ConvertSvgToPng(subSvgContent);
+                byte[] svgInImageBytes = ConvertSvgToPng(subSvgContent); // ok, I don't really need this, but it's for dimension...
 
                 int newHeight = 100;
                 int newWidth = GetWidthByHeight(newHeight, svgInImageBytes);
+                // Console.WriteLine($"-------------\nDimensions:\nHeight: {newHeight}\nWidth: {newWidth}------------\n");
+/*                newHeight = 65;
+                newWidth = 284;*/
 
-                string base64Image = Convert.ToBase64String(svgInImageBytes);
+                // Console.WriteLine($"\nSubSVG:\n{subSvgContent}\n----------------");
+
+                subSvgContent = ResizeSVG(subSvgContent, newWidth, newHeight);
+
+                subSvgContent = Regex.Replace(subSvgContent, @"<svg\b([^>]*)>", match =>
+                {
+                    string innerTag = match.Value;
+                    innerTag = Regex.Replace(innerTag, @"\b(width|height)\s*=\s*""[^""]*""", string.Empty, RegexOptions.IgnoreCase);
+                    return innerTag.Replace("<svg", "<svg width=\"100%\" height=\"100%\"");
+                }, RegexOptions.IgnoreCase);
+
+                // Console.WriteLine($"\nSubSvg after change:\n{subSvgContent}\n----------------");
+
+                //string base64Image = Convert.ToBase64String(svgInImageBytes);
 
                 svgContent = $@"
 <svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" x=""0"" y=""0"">
   <defs>
     <clipPath id=""clip-{fileName}"">
-      <rect width=""{newWidth}"" height=""{newHeight}"" rx=""8"" />
+      <rect width=""100%"" height=""100%"" rx=""8"" />
     </clipPath>
   </defs>
-  <image href=""data:image/png;base64,{base64Image}"" width=""{newWidth}px"" height=""{newHeight}px"" 
-         clip-path=""url(#clip-{fileName})"" preserveAspectRatio=""xMidYMid meet"" />
+  {subSvgContent}
 </svg>";
-                //Console.WriteLine("Final SVG:");
-                //Console.WriteLine(svgContent);
-                /*                Console.WriteLine("");
-                                Console.WriteLine($"Computed dimensions: width:{newWidth} height:{newHeight}");
-                                Console.WriteLine(subSvgContent);
 
-                                svgContent = "asdf";*/
+                // Console.WriteLine($"\nFinal SVG:\n{svgContent}\n----------------");
+                /*                //Console.WriteLine("Final SVG:");
+                                //Console.WriteLine(svgContent);*/
+                /*                Console.WriteLine("");
+                                                Console.WriteLine($"Computed dimensions: width:{newWidth} height:{newHeight}");
+                                                Console.WriteLine(subSvgContent);*/
             }
 
 
@@ -174,29 +193,29 @@ namespace GithubBadges.Middlewares
                     }
                 }*/
 
-        /*        public static string AddClipPathAttribute(string svgContent)
-                {
-                    if (string.IsNullOrWhiteSpace(svgContent))
-                        return svgContent;
+        public static string AddClipPathAttribute(string svgContent, string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(svgContent))
+                return svgContent;
 
-                    int svgStartIndex = svgContent.IndexOf("<svg", StringComparison.OrdinalIgnoreCase);
-                    if (svgStartIndex == -1)
-                        return svgContent;
+            int svgStartIndex = svgContent.IndexOf("<svg", StringComparison.OrdinalIgnoreCase);
+            if (svgStartIndex == -1)
+                return svgContent;
 
-                    int svgTagEndIndex = svgContent.IndexOf('>', svgStartIndex);
-                    if (svgTagEndIndex == -1)
-                        return svgContent;
+            int svgTagEndIndex = svgContent.IndexOf('>', svgStartIndex);
+            if (svgTagEndIndex == -1)
+                return svgContent;
 
-                    string firstSvgTag = svgContent.Substring(svgStartIndex, svgTagEndIndex - svgStartIndex + 1);
+            string firstSvgTag = svgContent.Substring(svgStartIndex, svgTagEndIndex - svgStartIndex + 1);
 
-                    if (!Regex.IsMatch(firstSvgTag, @"\bclip-path\s*=", RegexOptions.IgnoreCase))
-                    {
-                        string updatedTag = firstSvgTag.TrimEnd('>', ' ') + " clip-path=\"url(#clip)\">";
-                        svgContent = svgContent.Replace(firstSvgTag, updatedTag);
-                    }
+            if (!Regex.IsMatch(firstSvgTag, @"\bclip-path\s*=", RegexOptions.IgnoreCase))
+            {
+                string updatedTag = firstSvgTag.TrimEnd('>', ' ') + $" clip-path=\"url(#clip-{fileName})\">";
+                svgContent = svgContent.Replace(firstSvgTag, updatedTag);
+            }
 
-                    return svgContent;
-                }*/
+            return svgContent;
+        }
 
         public static string RemoveComments(string svgContent)
         {
@@ -307,6 +326,55 @@ namespace GithubBadges.Middlewares
         }
 
         // ISSUE WITH RESIZE <= solved
+
+        public static string ResizeSVG(string svg, double newWidth, double newHeight)
+        {
+            string newWidthStr = newWidth.ToString("0.##") + "px";
+            string newHeightStr = newHeight.ToString("0.##") + "px";
+
+            Regex svgTagRegex = new Regex(@"<svg\b[^>]*>", RegexOptions.IgnoreCase);
+            Match match = svgTagRegex.Match(svg);
+            if (!match.Success)
+            {
+                return svg;
+            }
+
+            string originalSvgTag = match.Value;
+            string updatedSvgTag = originalSvgTag;
+
+            if (Regex.IsMatch(originalSvgTag, @"\bwidth\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
+            {
+                updatedSvgTag = Regex.Replace(
+                    updatedSvgTag,
+                    @"\bwidth\s*=\s*""[^""]*""",
+                    $"width=\"{newWidthStr}\"",
+                    RegexOptions.IgnoreCase
+                );
+            }
+            else
+            {
+                updatedSvgTag = updatedSvgTag.Replace("<svg", $"<svg width=\"{newWidthStr}\"");
+            }
+
+            if (Regex.IsMatch(originalSvgTag, @"\bheight\s*=\s*""[^""]*""", RegexOptions.IgnoreCase))
+            {
+                updatedSvgTag = Regex.Replace(
+                    updatedSvgTag,
+                    @"\bheight\s*=\s*""[^""]*""",
+                    $"height=\"{newHeightStr}\"",
+                    RegexOptions.IgnoreCase
+                );
+            }
+            else
+            {
+                updatedSvgTag = updatedSvgTag.Replace("<svg", $"<svg height=\"{newHeightStr}\"");
+            }
+
+            string result = svg.Substring(0, match.Index)
+                            + updatedSvgTag
+                            + svg.Substring(match.Index + match.Length);
+            return result;
+        }
 
         public static string Resize(string svg, double newWidth, double newHeight)
         {
