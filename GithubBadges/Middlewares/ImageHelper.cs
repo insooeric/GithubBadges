@@ -58,7 +58,7 @@ namespace GithubBadges.Middlewares
             }
             else if (extension.Equals(".svg"))
             {
-                // Console.WriteLine("Parsing svg to png");
+                //Console.WriteLine("Parsing svg to png");
                 byte[] fileBytes;
                 using (var memoryStream = new MemoryStream())
                 {
