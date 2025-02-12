@@ -70,9 +70,14 @@ namespace GithubBadges.Middlewares
 
                 // Console.WriteLine($"\nInitial SVG:\n{subSvgContent}\n----------------");
                 subSvgContent = RemoveComments(subSvgContent);
-                // subSvgContent = AddClipPathAttribute(subSvgContent);
                 subSvgContent = Regex.Replace(subSvgContent, @"<\?xml[^>]+\?>", string.Empty, RegexOptions.IgnoreCase);
                 subSvgContent = AddClipPathAttribute(subSvgContent, fileName);
+
+                string viewBoxString = "";
+                subSvgContent = TrimViewBox(subSvgContent, out viewBoxString);
+                viewBoxString = $"viewBox=\"{viewBoxString}\"";
+
+                // Console.WriteLine(subSvgContent);
 
                 
                 // OK. nothing WRONG till this point
@@ -98,11 +103,12 @@ namespace GithubBadges.Middlewares
                 }, RegexOptions.IgnoreCase);
 
                 // Console.WriteLine($"\nSubSvg after change:\n{subSvgContent}\n----------------");
+                // Console.WriteLine($"\nDetected viewbox:\n{viewBoxString}\n----------------");
 
                 //string base64Image = Convert.ToBase64String(svgInImageBytes);
 
                 svgContent = $@"
-<svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" x=""0"" y=""0"">
+<svg xmlns=""http://www.w3.org/2000/svg"" width=""{newWidth}px"" height=""{newHeight}px"" {viewBoxString} x=""0"" y=""0"">
   <defs>
     <clipPath id=""clip-{fileName}"">
       <rect width=""100%"" height=""100%"" rx=""8"" />
@@ -130,6 +136,27 @@ namespace GithubBadges.Middlewares
             return svgContent;
         }
 
+        public static string TrimViewBox(string svgContent, out string viewBoxString)
+        {
+            // think of logic...
+            // we're gonna get string before viewbox, 
+            // viewbox element
+            // string after viewbox?
+            viewBoxString = "";
+
+            Regex regex = new Regex(@"(<svg\b[^>]*?)\s*viewBox\s*=\s*""([^""]*)""([^>]*>)", RegexOptions.IgnoreCase);
+            Match match = regex.Match(svgContent);
+
+            if (match.Success)
+            {
+                viewBoxString = match.Groups[2].Value.Trim();
+                string replacement = match.Groups[1].Value + match.Groups[3].Value;
+
+                svgContent = regex.Replace(svgContent, replacement, 1);
+            }
+
+            return svgContent;
+        }
 
         public static byte[] ConvertSvgToPng(string svgContent)
         {

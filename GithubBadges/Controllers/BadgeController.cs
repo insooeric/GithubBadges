@@ -126,7 +126,7 @@ namespace GithubBadges.Controllers
 
                 string finalSVG = ImageHelper.ConvertToSVG(request.BadgeFile, fileName);
 
-                //Console.WriteLine(finalSVG);
+                // Console.WriteLine(finalSVG);
 
                 // return BadRequest(new { Message = $"Error: Testing" }); // MAKE SURE TO REMOVE THIS LINE
 
@@ -505,7 +505,7 @@ namespace GithubBadges.Controllers
                             await storageClient.DownloadObjectAsync(item.imageObject, memoryStream);
                             item.imageInByte = memoryStream.ToArray();
                             item.imageInSvg = Encoding.UTF8.GetString(item.imageInByte);
-                            // Console.WriteLine($"\nLoaded SVG:\n{item.imageInSvg}\n");
+                            //Console.WriteLine($"\nLoaded SVG:\n{item.imageInSvg}\n");
 
                             string ext = Path.GetExtension(item.imageObject.Name).ToLower(); // should be .svg
                             item.imageExtension = ext;
@@ -607,7 +607,11 @@ namespace GithubBadges.Controllers
                     // svgContent = Encoding.UTF8.GetString(imageList[0].imageInByte);
 
                     // Console.WriteLine($"\nLoaded SVG:\n{svgContent}\n");
-                    svgContent = ImageHelper.Resize(imageList[0].imageInSvg, ImageHelper.GetWidthByHeight(40, imageList[0].imageInSvg), 40);
+                    //svgContent = ImageHelper.ResizeSVG(imageList[0].imageInSvg, ImageHelper.GetWidthByHeight(40, imageList[0].imageInSvg), 40);
+                    int newHeight = 40;
+                    int newWidth = ImageHelper.GetWidthByHeight(newHeight, imageList[0].imageInSvg);
+                    Console.WriteLine($"New dimension:\nWidth: {newWidth}\nHeight: {newHeight}");
+                    svgContent = imageList[0].imageInSvg;
                     // BOOM!
                 }
                 else if (imageList.Count > 1) // in case multiple images
