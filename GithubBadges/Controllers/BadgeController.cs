@@ -610,8 +610,8 @@ namespace GithubBadges.Controllers
                     //svgContent = ImageHelper.ResizeSVG(imageList[0].imageInSvg, ImageHelper.GetWidthByHeight(40, imageList[0].imageInSvg), 40);
                     int newHeight = 40;
                     int newWidth = ImageHelper.GetWidthByHeight(newHeight, imageList[0].imageInSvg);
-                    Console.WriteLine($"New dimension:\nWidth: {newWidth}\nHeight: {newHeight}");
-                    svgContent = imageList[0].imageInSvg;
+                    //Console.WriteLine($"New dimension:\nWidth: {newWidth}\nHeight: {newHeight}");
+                    svgContent = ImageHelper.ResizeSVG(imageList[0].imageInSvg, newWidth, newHeight); //imageList[0].imageInSvg;
                     // BOOM!
                 }
                 else if (imageList.Count > 1) // in case multiple images
