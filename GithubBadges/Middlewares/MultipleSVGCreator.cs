@@ -43,7 +43,7 @@ namespace GithubBadges.Middlewares
                         }*/
 
             // ENHANCED LOGIC
-            // Note that ALWAYS row & col <= badgeSvgs.Count
+            // NOTE that ALWAYS row & col <= badgeSvgs.Count
 
             // 1. if both are 0, meaning undefined, we're gonna automatically display flow
             if (row == 0 && col == 0)
@@ -101,45 +101,30 @@ namespace GithubBadges.Middlewares
             // TODO: CHECK LOGICAL SPECIFICATIONS HERE
             // TODO: CHECK LOGICAL SPECIFICATIONS HERE
 
-
-            double[] columnWidths = new double[col];
-            for (int j = 0; j < col; j++)
+            double overallWidth = 0;
+            double[] rowWidths = new double[row];
+            for (int i = 0; i < row; i++)
             {
-                double maxWidth = 0;
-                for (int i = 0; i < row; i++)
+                double rowWidth = 0;
+                int itemsInRow = 0;
+                for (int j = 0; j < col; j++)
                 {
                     int index = i * col + j;
                     if (index < badgeSvgs.Count)
                     {
-                        maxWidth = Math.Max(maxWidth, badgeSvgs[index].width);
+                        rowWidth += badgeSvgs[index].width;
+                        itemsInRow++;
+                        if (j < col - 1 && index < badgeSvgs.Count - 1)
+                        {
+                            rowWidth += gap;
+                        }
                     }
                 }
-                columnWidths[j] = maxWidth;
+                rowWidths[i] = rowWidth;
+                overallWidth = Math.Max(overallWidth, rowWidth);
             }
 
-            double overallWidth = 0;
-            double[] columnOffsets = new double[col];
-            for (int j = 0; j < col; j++)
-            {
-                columnOffsets[j] = overallWidth;
-                overallWidth += columnWidths[j];
-                if (j < col - 1)
-                {
-                    overallWidth += gap;
-                }
-            }
-
-            double overallHeight = 0;
-            double[] rowOffsets = new double[row];
-            for (int i = 0; i < row; i++)
-            {
-                rowOffsets[i] = overallHeight;
-                overallHeight += targetHeight;
-                if (i < row - 1)
-                {
-                    overallHeight += gap;
-                }
-            }
+            double overallHeight = row * targetHeight + (row - 1) * gap;
 
             StringBuilder svgBuilder = new StringBuilder();
             svgBuilder.AppendLine(
@@ -147,6 +132,8 @@ namespace GithubBadges.Middlewares
 
             for (int i = 0; i < row; i++)
             {
+                double xOffset = 0;
+                double yOffset = i * (targetHeight + gap);
                 for (int j = 0; j < col; j++)
                 {
                     int index = i * col + j;
@@ -154,14 +141,14 @@ namespace GithubBadges.Middlewares
                     {
                         continue;
                     }
-
                     var badge = badgeSvgs[index];
-                    double cellX = columnOffsets[j];
-                    double cellY = rowOffsets[i];
-
-                    string positionedBadgeSvg = ImageHelper.UpdatePosition(badge.svg, cellX, cellY);
-
+                    string positionedBadgeSvg = ImageHelper.UpdatePosition(badge.svg, xOffset, yOffset);
                     svgBuilder.AppendLine(positionedBadgeSvg);
+                    xOffset += badge.width;
+                    if (j < col - 1 && index < badgeSvgs.Count - 1)
+                    {
+                        xOffset += gap;
+                    }
                 }
             }
 
