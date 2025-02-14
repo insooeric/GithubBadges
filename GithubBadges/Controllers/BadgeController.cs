@@ -66,7 +66,6 @@ namespace GithubBadges.Controllers
         [Authorize] // MAKE SURE TO UNCOMMENT THIS
         public async Task<IActionResult> UploadBadgeAsync([FromForm] BadgeUploadRequestModel request)
         {
-            Env.Load();
             try
             {
                 if (request.BadgeFile == null || request.BadgeFile.Length <= 0)
@@ -126,7 +125,7 @@ namespace GithubBadges.Controllers
 
                 string finalSVG = ImageHelper.ConvertToSVG(request.BadgeFile, fileName);
 
-                //Console.WriteLine(finalSVG);
+                // Console.WriteLine(finalSVG);
 
                 // return BadRequest(new { Message = $"Error: Testing" }); // MAKE SURE TO REMOVE THIS LINE
 
@@ -135,6 +134,7 @@ namespace GithubBadges.Controllers
                 string contentType = "image/svg+xml";
 
                 byte[] finalSVGBytes = System.Text.Encoding.UTF8.GetBytes(finalSVG);
+
                 using (var uploadStream = new MemoryStream(finalSVGBytes))
                 {
                     await storageClient.UploadObjectAsync(BucketName, fullPath, contentType, uploadStream);

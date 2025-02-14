@@ -74,20 +74,24 @@ namespace GithubBadges.Middlewares
                 subSvgContent = AddClipPathAttribute(subSvgContent, fileName);
 
                 string viewBoxString = "";
+
+                int newHeight = 100;
+                int newWidth = GetWidthByHeight(newHeight, subSvgContent);
+
+                //Console.WriteLine($"-------------\nDimensions:\nHeight: {newHeight}\nWidth: {newWidth}------------\n");
+
                 subSvgContent = TrimViewBox(subSvgContent, out viewBoxString);
                 viewBoxString = $"viewBox=\"{viewBoxString}\"";
 
-                // Console.WriteLine(subSvgContent);
+                //Console.WriteLine(subSvgContent);
 
                 
                 // OK. nothing WRONG till this point
 
 
-                byte[] svgInImageBytes = ConvertSvgToPng(subSvgContent); // ok, I don't really need this, but it's for dimension...
+                //byte[] svgInImageBytes = ConvertSvgToPng(subSvgContent); // ok, I don't really need this, but it's for dimension...
 
-                int newHeight = 100;
-                int newWidth = GetWidthByHeight(newHeight, svgInImageBytes);
-                // Console.WriteLine($"-------------\nDimensions:\nHeight: {newHeight}\nWidth: {newWidth}------------\n");
+
 /*                newHeight = 65;
                 newWidth = 284;*/
 
@@ -326,19 +330,40 @@ namespace GithubBadges.Middlewares
 
         private static (double Width, double Height) GetSvgDimensions(string svgContent)
         {
+            // Console.WriteLine(svgContent);
+
             if (string.IsNullOrWhiteSpace(svgContent))
                 throw new ArgumentNullException(nameof(svgContent));
 
             var widthMatch = Regex.Match(svgContent, "width\\s*=\\s*\"([^\"]+)\"", RegexOptions.IgnoreCase);
             var heightMatch = Regex.Match(svgContent, "height\\s*=\\s*\"([^\"]+)\"", RegexOptions.IgnoreCase);
 
-            if (!widthMatch.Success || !heightMatch.Success)
-                throw new ArgumentException("SVG content does not contain valid width and height attributes.");
 
-            double originalWidth = ParseDimension(widthMatch.Groups[1].Value);
-            double originalHeight = ParseDimension(heightMatch.Groups[1].Value);
+            if (widthMatch.Success && heightMatch.Success)
+            {
+                double width = ParseDimension(widthMatch.Groups[1].Value);
+                double height = ParseDimension(heightMatch.Groups[1].Value);
+                return (width, height);
+            }
 
-            return (originalWidth, originalHeight);
+            var viewBoxMatch = Regex.Match(svgContent, "viewBox\\s*=\\s*\"([^\"]+)\"", RegexOptions.IgnoreCase);
+            if (viewBoxMatch.Success)
+            {
+                var parts = viewBoxMatch.Groups[1].Value
+                    .Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 4 &&
+                    double.TryParse(parts[2], NumberStyles.Any, CultureInfo.InvariantCulture, out double vbWidth) &&
+                    double.TryParse(parts[3], NumberStyles.Any, CultureInfo.InvariantCulture, out double vbHeight))
+                {
+                    return (vbWidth, vbHeight);
+                }
+                else
+                {
+                    throw new ArgumentException("SVG viewBox attribute does not contain valid values.");
+                }
+            }
+
+            throw new ArgumentException("SVG content does not contain valid width/height attributes or a viewBox attribute.");
         }
 
         private static double ParseDimension(string dimension)
