@@ -439,8 +439,8 @@ namespace GithubBadges.Controllers
         public async Task<IActionResult> GetBadgeAsync([FromQuery] string? user, [FromQuery] string badge, [FromQuery] int? row, [FromQuery] int? col, [FromQuery] bool? fit)
         {
             Env.Load();
-            bool offline_debug = (Environment.GetEnvironmentVariable("OFFLINE_MODE") ?? "").ToLower().Equals("true") ? true : false;
-            Console.WriteLine($"offline debug: {offline_debug}");
+            //bool offline_debug = (Environment.GetEnvironmentVariable("OFFLINE_MODE") ?? "").ToLower().Equals("true") ? true : false;
+            //Console.WriteLine($"offline debug: {offline_debug}");
 
 
             try
@@ -479,7 +479,7 @@ namespace GithubBadges.Controllers
                     );
                 }
 
-                if (offline_debug)
+                /* if (offline_debug)
                 {
                     foreach (var item in imageList)
                     {
@@ -519,10 +519,10 @@ namespace GithubBadges.Controllers
                                 break;
                         }
                     }
-                }
-
+                }*/
+/*
                 if (!offline_debug)
-                {
+                {*/
                     var credential = GoogleCredential.FromJson(JsonGoogleCred);
                     StorageClient storageClient = await StorageClient.CreateAsync(credential);
 
@@ -627,7 +627,7 @@ namespace GithubBadges.Controllers
                             return BadRequest(new { Message = $"Could not find the badge named \"{item.imageName}\"" });
                         }
                     }
-                }
+                // }
 
                 
 
