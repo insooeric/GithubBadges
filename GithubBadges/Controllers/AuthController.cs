@@ -42,7 +42,7 @@ namespace GithubBadges.Controllers
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.None,
-                Domain = "badgehub.vercel.app",
+                Domain = ".badgehub.vercel.app",
                 Path = "/",
                 Expires = DateTime.UtcNow.AddHours(1)
             });
