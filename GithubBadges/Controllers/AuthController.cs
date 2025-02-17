@@ -47,9 +47,30 @@ namespace GithubBadges.Controllers
                 Expires = DateTime.UtcNow.AddHours(1)
             });
 
-            Console.WriteLine(Response.Cookies.ToString());
+            // Console.WriteLine(Response.Cookies.ToString());
 
-            return Redirect("https://badgehub.vercel.app/");
+            // return Redirect("https://badgehub.vercel.app/");
+
+            string redirectUrl = "https://badgehub.vercel.app/";
+            string htmlContent = $@"
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset=""UTF-8"">
+        <title>Login Successful</title>
+        <meta http-equiv=""refresh"" content=""2;url={redirectUrl}"" />
+      </head>
+      <body>
+        <p>Login successful. Redirecting...</p>
+        <script type=""text/javascript"">
+          setTimeout(function() {{
+            window.location.href = '{redirectUrl}';
+          }}, 2000);
+        </script>
+      </body>
+    </html>";
+
+            return Content(htmlContent, "text/html");
         }
 
         [HttpGet("user")]
