@@ -15,13 +15,18 @@ namespace GithubBadges.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly bool isDevMode = false;
+        private readonly string devMode_Client_ID = "";
+        private readonly string devMode_Client_Secret = "";
         //private readonly IConfiguration _configuration;
 
         public AuthController(IHttpClientFactory httpClientFactory)
         {
             Env.Load();
             _httpClientFactory = httpClientFactory;
-            //_configuration = configuration;
+            isDevMode = (Environment.GetEnvironmentVariable("DEV_MODE") ?? "false").ToLower().Equals("true");
+            devMode_Client_ID = Environment.GetEnvironmentVariable("GITHUB_DEV_CLIENT_ID") ?? "";
+            devMode_Client_Secret = Environment.GetEnvironmentVariable("GITHUB_DEV_CLIENT_SECRET") ?? "";
         }
 
         [HttpGet("github/callback")]
@@ -42,7 +47,7 @@ namespace GithubBadges.Controllers
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.None,
-                Domain = ".badgehub.vercel.app",
+                // Domain = ".badgehub.vercel.app",
                 Path = "/",
                 Expires = DateTime.UtcNow.AddHours(1)
             });
@@ -171,7 +176,7 @@ namespace GithubBadges.Controllers
         {
             var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
 
-/*            Console.WriteLine($"JWT_SECRET: {jwtSecret}");*/
+            /*            Console.WriteLine($"JWT_SECRET: {jwtSecret}");*/
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -198,7 +203,7 @@ namespace GithubBadges.Controllers
         private ClaimsPrincipal ValidateJwtToken(string token)
         {
             var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
-/*            Console.WriteLine($"JWT_SECRET: {jwtSecret}");*/
+            /*            Console.WriteLine($"JWT_SECRET: {jwtSecret}");*/
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
 
 
