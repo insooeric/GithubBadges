@@ -43,14 +43,9 @@ namespace GithubBadges.Controllers
                 Secure = true,
                 SameSite = SameSiteMode.None,
                 Domain = ".badgehub.vercel.app",
-                //Domain = "githubbadges.onrender.com",
                 Path = "/",
                 Expires = DateTime.UtcNow.AddHours(1)
             });
-
-            // Console.WriteLine(Response.Cookies.ToString());
-
-            // return Redirect("https://badgehub.vercel.app/");
 
             string redirectUrl = "https://badgehub.vercel.app/";
             string htmlContent = $@"
@@ -120,11 +115,8 @@ namespace GithubBadges.Controllers
             var client = _httpClientFactory.CreateClient();
             var request = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token");
 
-            var clientId = Environment.GetEnvironmentVariable("GITHUB_CLIENT_ID");//_configuration["GITHUB_CLIENT_ID"];
-            var clientSecret = Environment.GetEnvironmentVariable("GITHUB_CLIENT_SECRET");//_configuration["GITHUB_CLIENT_SECRET"];
-
-/*            Console.WriteLine($"CLIENT_ID: {clientId}");
-            Console.WriteLine($"CLIENT_SECRET: {clientSecret}");*/
+            var clientId = Environment.GetEnvironmentVariable("GITHUB_CLIENT_ID");
+            var clientSecret = Environment.GetEnvironmentVariable("GITHUB_CLIENT_SECRET");
 
             var body = new Dictionary<string, string>
             {
@@ -177,7 +169,7 @@ namespace GithubBadges.Controllers
 
         private string GenerateJwtToken(string id, string username, string email, string avatarUrl)
         {
-            var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");//_configuration["JWT_SECRET"];
+            var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET");
 
 /*            Console.WriteLine($"JWT_SECRET: {jwtSecret}");*/
 
