@@ -28,6 +28,15 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
+    "GithubBadges": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:32769",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
     "Container (Dockerfile)": {
       "commandName": "Docker",
       "launchBrowser": true,

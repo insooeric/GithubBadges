@@ -47,12 +47,11 @@ namespace GithubBadges.Controllers
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.None,
-                // Domain = ".badgehub.vercel.app",
                 Path = "/",
-                Expires = DateTime.UtcNow.AddHours(1)
+                Expires = DateTime.UtcNow.AddHours(2)
             });
 
-            string redirectUrl = "https://badgehub.vercel.app/";
+            string redirectUrl = isDevMode ? "http://localhost:3000/" : "https://badgehub.vercel.app/";
             string htmlContent = $@"
     <!DOCTYPE html>
     <html>
@@ -120,8 +119,15 @@ namespace GithubBadges.Controllers
             var client = _httpClientFactory.CreateClient();
             var request = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token");
 
-            var clientId = Environment.GetEnvironmentVariable("GITHUB_CLIENT_ID");
-            var clientSecret = Environment.GetEnvironmentVariable("GITHUB_CLIENT_SECRET");
+            string clientId = Environment.GetEnvironmentVariable("GITHUB_CLIENT_ID") ?? "";
+            string clientSecret = Environment.GetEnvironmentVariable("GITHUB_CLIENT_SECRET") ?? "";
+
+            if (isDevMode)
+            {
+                clientId = devMode_Client_ID;
+                clientSecret = devMode_Client_Secret;
+            }
+            
 
             var body = new Dictionary<string, string>
             {
